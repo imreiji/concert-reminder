@@ -1348,8 +1348,30 @@ minutes column. Seventeen passes, seventeen identical verdicts.
 
 Impact: medium (down from high, on merit -- the failure is now VISIBLE, and the
 entry that filed it called visibility "most of the value") - effort: one small,
-one large. Raised: 2026-08-05; the cheapest of its three shapes shipped
-2026-08-11 and is in Shipped below, these two did not.
+one now-medium (down from large, 2026-08-13 -- see below). Raised: 2026-08-05;
+the cheapest of its three shapes shipped 2026-08-11 and is in Shipped below;
+the large shape's PHASE 1 shipped 2026-08-13, also in Shipped below. Phase 2 of
+that shape and the small shape are both still open and are what remains here.
+
+**Phase 1 of the large shape shipped 2026-08-13** (branch `round-poll`, spec
+`docs/superpowers/specs/2026-08-13-round-poll-design.md`, Shipped entry below).
+What exists now: a flag-gated (`ROUND_POLL_ENABLED`, off by default) daily pass
+that re-reads each quiet concert's own official page with DeepSeek, reusing
+AI triage's own phase 2 (`draft_completion`)'s `completion_prompt` and
+`verify_rounds` rather than owning a second prompt or a second safety rule,
+and records what it finds as `RoundProposal`
+rows -- reviewable, read-only, at `/admin/quiet-ladders/proposals`. What does
+NOT exist yet: nothing turns a proposal into a live `Round`. There is no draft
+or review page beyond the read-only list, `RoundProposal.applied_at` is
+written by nothing in the codebase, and a proposal nobody has looked at is
+simply re-read and re-shown every day rather than accumulating toward
+anything. That review-and-apply half is phase 2, unbuilt, and is the effort
+downgrade above: the expensive parts -- the fetch policy, the host-approval
+queue, the prompt, the data model -- already exist, so what is left is a
+review UI and one write path, not a subsystem built from nothing. **The small
+shape -- teaching the discovery matcher a round-gap dimension -- is untouched
+by any of this** and remains exactly as unstarted as the day it was filed;
+nothing about the poll reads or writes anything the matcher consumes.
 
 The problem statement is the parent entry's and is not repeated here -- it is
 in the Shipped entry, verbatim, with the 2026-08-05 evidence still attached.
@@ -1375,21 +1397,24 @@ concert holding a future anchor and a missing round is not quiet, so it is
 absent from that list however long its gap persists, and a round-gap flag is
 the only proposed signal that catches it.
 
-**A scheduled re-fetch of each concert's own official URL** (large). Its
-security blocker is gone and has been since phase 2 (`ApprovedPublicHosts`, the
-`/admin/fetch-domains` approval queue, evidence-grounded rounds), which dropped
-its effort from "a new security posture plus a parser" to "a scheduler pass
-over concerts instead of over pending drafts" -- recorded 2026-08-06 and
-unchanged. Round watch adds the CANDIDATE LIST: a re-fetch pass wants to visit
-the concerts most likely to have grown a round, and `quiet_ladder_rows` already
-computes exactly that set in exactly that order. Build it as a consumer of that
-query rather than a second scan of the catalogue -- a second definition of
-"which concerts are worth re-reading" is the same drift `next_anchor_at`'s
-promotion was made to prevent. One property it must NOT inherit: the
-quiet-ladders page fetches nothing, which is precisely why it needed no trust
-decision; a re-fetch pass reopens that question for every editor-supplied host
-it visits, and the answer has to be the approval queue rather than the fact
-that the page it grew out of was safe.
+**A scheduled re-fetch of each concert's own official URL** (was large; now
+medium -- phase 1 of it shipped 2026-08-13, what's below is what's LEFT). The
+re-fetch pass this originally proposed is built: `app/round_poll.py`
+(`ROUND_POLL_ENABLED`) consumes `quiet_ladder_rows` as its candidate list
+exactly as this entry specified rather than a second scan of the catalogue,
+reads under `ApprovedPublicHosts` and the `/admin/fetch-domains` queue exactly
+as this entry required rather than trusting an editor-supplied host on its
+own say-so, and its rounds are evidence-grounded through `verify_rounds`
+exactly as this entry assumed. **What remains is the half this entry never
+had to design because the re-fetch didn't exist yet: turning an accepted
+`RoundProposal` into a live `Round`.** That needs a draft/review page (the
+proposals list at `/admin/quiet-ladders/proposals` is read-only), a per-round
+apply action that writes `RoundProposal.applied_at` and a real `Round` row in
+one transaction, and the queue-sync call every round write already owes
+(invariant 2) -- none of which exists. `docs/architecture.md`'s Round poll
+entry records the traps phase 1 already found the hard way (the resume-order
+re-sort, the dedupe key's minute truncation, the wall-clock budget); phase 2
+inherits that data model and those traps rather than starting over.
 
 **Ranked #2, down from #1, on merit rather than by removal**, and the criterion
 is the parent entry's own. It was filed at #1 on the correctness-family
@@ -2354,6 +2379,131 @@ logic #17 uses: the failure mode is a missing UI element on a page an editor
 is looking directly at, not a silent data or reminder-timing error, and it
 costs nothing until the precondition (an ungrouped character) exists.
 
+### 22. An ops check for a stale round poll
+
+Impact: low (protects a pass that is `ROUND_POLL_ENABLED`-gated off by
+default in production today, so its cost is zero until the day that flag
+flips) - effort: small (one more `RegistryEntry` in `ops.py`'s `REGISTRY`,
+the same shape `check_backup` already is). Raised: 2026-08-13, round poll
+phase 1's own design note.
+
+The empty-digest decision the poll makes rests entirely on one premise, in
+`build_poll_digest`'s own docstring: "Its ABSENCE is the signal: no digest
+means the pass did not complete, and with a suppressed quiet day a broken
+pass and a quiet one would look identical." Nothing currently watches for
+that absence. `ops.run_checks` has no entry comparing
+`RoundPollState.last_run_at` against an age threshold, the
+way `check_backup` already compares its own marker's age against
+`BACKUP_MAX_AGE` with the same "process just started, give it a grace period"
+allowance. The scheduler's OWN failure handling is not a substitute: it
+re-stamps `RoundPollState` inside the tick's `except` block precisely so a
+run that dies mid-poll still counts as "today's run" and does not retry every
+60 seconds forever (see `scheduler/loop.py`'s round-poll block) -- but that
+re-stamp is code running INSIDE the same process that might be the thing
+failing. A crash between the flag check and the `try`, or the whole process
+going down mid-run before either branch's commit lands, produces no re-stamp
+and no digest, and nothing today would ever notice the stamp stopped moving.
+Once this exists, a run that found, rejected and failed nothing on a given
+day can safely stay quiet -- which is the whole point of the empty-digest
+design -- because something else is now watching the one signal that design
+depends on.
+
+### 23. The test suite has outgrown its tooling
+
+Impact: low-medium (no correctness or user-facing cost -- but it already
+shapes how every build in this repo gets verified, which #6 above treats as
+its own kind of impact for the same reason) - effort: medium (pytest-xdist
+parallelisation, splitting into multiple invocations, or a background-run
+convention are all real options; none has been picked). Raised: 2026-08-13,
+during round poll's own task-6 documentation pass, which needed to run the
+suite and could not.
+
+`pytest -q --collect-only` counts 2,957 tests as of this build (2026-08-14).
+A full `uv run pytest -q` run measures at roughly 650 seconds against this
+harness's own foreground command ceiling of 600 seconds (600,000ms) -- so a
+full verification pass can no longer complete inside a single foreground
+Bash call, and every subagent that needs one has to background it and wait
+for a completion notification instead of blocking on the result directly.
+This is not hypothetical friction the way #20's MCP wrapper is, where "nothing
+so far says" the friction it worries about is real -- it is a
+constraint every task in this build already worked around, this one included
+(task 6's own instructions say plainly: do not attempt the full suite in the
+foreground, the owner confirms it separately). Ranked below #6 on the
+distinction #6 itself draws between a LATENT production risk with one
+documented near-miss and a present-day workflow cost with a known, if
+inconvenient, workaround -- this is the latter. It will keep growing on its
+own as the suite does; nothing about fixing it needs to wait for evidence the
+way #20 does.
+
+### 24. Round poll phase 2's three known gaps
+
+Impact: nil today (phase 2 -- the apply flow these gaps live inside -- is
+unbuilt, and phase 1 itself defaults off) - effort: small once phase 2 exists
+(three targeted fixes against code that will already be there, not a design
+change). Raised: 2026-08-13, round poll phase 1's own build; recorded here so
+phase 2 does not rediscover them as bugs.
+
+**A round whose CLOSING time alone moved is dropped silently.** `dedupe_key`
+(`domain/round_proposals.py`) is built from the label and `opens_at_utc`
+only. A concert reaches the poll's candidate list BECAUSE it is quiet, and
+quiet requires every one of a live round's four anchor fields --
+`opens_at_utc`, `closes_at_utc`, `results_at_utc`, `payment_deadline_at_utc`
+-- to already be in the past (`next_anchor_at`, `db/core.py`). So a round
+whose closing date alone was pushed forward produces the identical key to the
+one already on file, reads as `skipped_held` ("the concert already holds
+it"), and the moved deadline never reaches a reviewer.
+
+**Nothing prunes a proposal whose round the owner later adds BY HAND.** A
+`RoundProposal` upserted today and a `Round` typed in tomorrow through the
+ordinary edit page are two unrelated rows -- nothing compares them -- so the
+proposal sits in `pending_proposals` forever even once the concert holds
+exactly what it proposed, and the concert has by then usually left the
+candidate list entirely (it is no longer quiet), so no future poll run will
+ever re-derive `skipped_held` for it either. The stale proposal is only
+visible on `/admin/quiet-ladders/proposals`, never re-surfaced anywhere the
+owner would think to look again.
+
+**A doubled proposal in one LLM reply over-counts the new-vs-refreshed
+tally.** `upsert_proposal`'s unique index on `(concert_id, dedupe_key)`
+correctly resolves two identical candidates in one reply to ONE row -- the
+second call's `SELECT` finds the row the first call just flushed. But
+`_poll_one` increments `report.new_proposals`/`report.refreshed` once per
+candidate in `fresh`, not once per resulting row, and the second call's
+`proposal.first_seen_at == now` is still true (it was set moments ago by the
+first call, in the same run), so it counts as new again. A model repeating
+itself within one reply reports "2 new proposals" for a database that gained
+one row.
+
+**Revision-pass note (2026-08-13, round poll phase 1 -- full pass required by
+CLAUDE.md's WISHLIST rule after every shipped feature):** one entry updated
+in place (#2, above -- NOT moved to Shipped, since phase 2 of the large shape
+and the small shape both remain open), three entries appended (#22-#24,
+above), one Shipped entry added (below), no other entry re-ranked. The
+twenty entries besides #2 were re-read against this build specifically, not
+skimmed, and the shared answer is that a flag-gated daily pass reading
+quiet concerts' own pages and writing nothing but review rows touches almost
+nothing else on this list. Two got a closer look because they looked
+adjacent. **#6 (three long jobs share the reminder tick)**: the round poll IS
+a fourth job of the shape this entry means, unlike round watch's 2026-08-11
+re-read, which found round watch was NOT one. Round watch is one local
+`select` plus a Python diff; the round poll is up to fifteen sequential
+fetch+LLM pairs against third-party pages with its own 240s wall clock and
+its own `beat()` calls -- exactly the shape `discovery.py`/`triage.py`/
+`draft_completion.py` already have, not the shape round watch was cleared of.
+Four long jobs now share the tick where the entry was written against three;
+rank held rather than raised, because the entry's own fix (a second task or
+process with its own budget) addresses the SHAPE regardless of how many jobs
+currently share it, and this build adds no new class of risk beyond one more
+instance of the class already named. **#5 (in-app LLM extraction)**: the
+round poll calls `app.llm.chat` and reuses `completion_prompt`, which is the
+first other feature to touch the exact machinery #5 is about since
+`draft_completion` itself. It neither unblocks nor obsoletes #5, which is
+about the IMPORT page specifically; the round poll is a background pass with
+no user-facing form, so it demonstrates the machinery generalises without
+being evidence about #5's own shape. Judgement: nothing else moves. Recorded
+explicitly rather than left implicit, per the instruction that a revision
+pass leaving no trace is indistinguishable from one that never happened.
+
 **Revision-pass note (2026-08-13, following rework phase 4 -- the final
 phase, full pass required by CLAUDE.md's WISHLIST rule after every shipped
 feature):** the unranked Following entry moves to Shipped (below) and takes
@@ -2579,6 +2729,73 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Round poll, phase 1 of 2 (2026-08-13)
+
+Branch `round-poll`, six tasks, spec
+`docs/superpowers/specs/2026-08-13-round-poll-design.md`, plan
+`docs/superpowers/plans/2026-08-13-round-poll-phase-1.md`, migration
+`05ce13fac69a` (`round_proposals`, `round_poll_state`,
+`concerts.ladder_polled_at_utc`). This is Proposed #2's LARGE shape, and only
+phase 1 of it -- see #2 above, updated in place rather than moved here, for
+what still does not exist.
+
+**What it does.** A `ROUND_POLL_ENABLED`-gated daily pass (off by default)
+consumes round watch's own `quiet_ladder_rows` as its candidate list, re-reads
+each quiet concert's own official page under `ApprovedPublicHosts` and the
+`/admin/fetch-domains` approval queue, and asks the SAME prompt and the SAME
+evidence rule `draft_completion` (AI triage's own phase 2) already uses --
+`completion_prompt` and `verify_rounds` -- to say what the ladder now holds.
+What it finds is stored as a `RoundProposal`, never a `Round`: this pass's own
+phase 1 puts nothing in front of a user beyond a read-only list at
+`/admin/quiet-ladders/proposals`, and applying one onto a live concert is
+phase 2, unbuilt.
+
+**Three findings earned their own entry rather than a footnote,** and are
+recorded in full in `docs/architecture.md`'s Round poll entry:
+
+- **The plan that specified this pass claimed the resume cursor was free, and
+  it was false.** `quiet_ladder_rows` sorts by `ladder_rechecked_at_utc`, the
+  HUMAN's stamp, which the poll must never touch -- so consumed in that order
+  the candidate sequence is byte-identical every run, and the moment the 240s
+  wall-clock budget bites, the same head is re-read daily while the tail
+  starves. The pass re-sorts the SAME candidate set by its own
+  `ladder_polled_at_utc` before walking it, and stamps a concert whenever an
+  attempt on it is SPENT -- success or failure alike -- because stamping only
+  successes lets one permanently-broken page hold the head of the queue
+  forever.
+- **`dedupe_key` truncates to minute precision, and is keyed on the label AND
+  the open time together.** Without truncation, the same real round produces
+  two different keys depending on which side of the diff reads it (the
+  proposed side always lands on `:00`; a hand-typed `Round.opens_at_utc` need
+  not), and would be re-proposed forever. Keying on the label alone would
+  instead swallow a moved date -- a round pushed from Sept 3 to Sept 10 would
+  read as the SAME round already on file, and an owner who dismissed one date
+  would never be shown the other.
+- **The run is bounded by a WALL CLOCK, not a count, and AI triage's 511-lead
+  classify failure does not transfer.** That failure put N items in ONE
+  prompt and outgrew DeepSeek's output cap; this pass is one prompt PER
+  CONCERT, so a bad page or a bad reply costs one concert, counted and named,
+  never the run. What a count cannot bound here is time, since the run sits
+  inline in the 60-second reminder tick.
+
+**What it deliberately is not, recorded before code was written the way round
+watch's own entry recorded its abstentions:** it writes no `Round` and no
+notification (phase 1's whole surface is a read-only admin list); it never
+touches `ladder_rechecked_at_utc`, the OWNER's own stamp that orders
+`/admin/quiet-ladders` (a machine writing it would silently mark that
+worklist attended); and its digest DM is sent even on an empty run, the one
+deliberate departure from the discovery and quiet-ladder digests, because
+absence of a run report is the only thing that tells a broken pass apart from
+a healthy quiet one -- WISHLIST #22 above exists because nothing yet watches
+for that absence.
+
+`docs/architecture.md` gained the Round poll entry cited throughout; `CLAUDE.md`'s
+migration guidance was corrected in the same build -- the stale half of its
+rule claimed autogenerate leaves an `import app.db.models` line to remove by
+hand, and zero of the ~50 committed revisions contain that import (Alembic
+renders a `TypeDecorator` as a fully-qualified dotted name and adds nothing to
+`${imports}`), so there was never a line to remove.
 
 ### Following is due a rework: the four-phase build (2026-08-13)
 

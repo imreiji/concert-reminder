@@ -586,8 +586,17 @@ rather than assuming a later pass will.
   the real server DDL. Its fixture covers only the four tables that migration
   touched; a migration hitting other legacy tables needs its own DDL.
 - After autogenerate, ALWAYS edit the revision: replace
-  `app.db.models.UTCDateTime()` with `sa.DateTime()` and remove the
-  `import app.db.models` line.
+  `app.db.models.UTCDateTime()` with `sa.DateTime()` — the on-disk type is
+  identical (`UTCDateTime`'s `impl` IS `DateTime`; the decorator only rejects
+  naive values on the way in), and without the replacement the generated file
+  is unrunnable as autogenerate leaves it: Alembic renders the `TypeDecorator`
+  as a fully-qualified dotted name (`app.db.models.UTCDateTime()`) but adds no
+  import for it — `alembic/script.py.mako`'s `${imports}` placeholder stays
+  empty for this, confirmed empty across the repo (zero of the ~50 committed
+  revisions under `alembic/versions/` contain `import app.db.models`) — so the
+  bare name `app` is undefined and `upgrade()` raises `NameError` the moment
+  it runs. There is no import line to remove; there never was one to begin
+  with.
 - `alembic.ini` and other config files must stay ASCII-only (the owner's
   Windows machine uses a GBK locale; em-dashes in configs crash it).
 - The dedupe index on reminder_queue uses coalesce() because SQLite treats
