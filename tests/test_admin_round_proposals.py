@@ -236,6 +236,81 @@ async def test_a_resolved_proposal_leaves_the_queue_and_its_concert(client):
     assert "<td>2次先行</td>" in r.text
 
 
+# ── The way ON, to each concert's own draft page ─────────────────────────
+
+
+def _group_block(html: str, title: str) -> str:
+    """One concert's whole group on this page -- its `<h2>` heading through to
+    just before the next concert's.
+
+    Every assertion below is scoped to it. A page-wide assertion has passed on
+    this repo with the whole feature deleted (base.html's chrome already
+    carried the string), and here it would additionally survive a mutation
+    that gave EVERY heading the first concert's `event_id`.
+    """
+    blocks = [b for b in html.split("<h2>")[1:] if f"{title}</a></h2>" in b]
+    assert blocks, f"no group heading for {title}"
+    assert len(blocks) == 1, f"more than one group heading for {title}"
+    return blocks[0]
+
+
+async def test_each_concert_heading_links_to_its_own_draft_page(client):
+    """Phase 2 shipped its whole UI -- the draft page, both POSTs, every form
+    -- with NO template anywhere linking to it, so the chain the digest DM
+    starts (DM -> this queue -> the page you actually act on) dead-ended here
+    and an operator could reach the feature only by hand-typing a URL
+    containing an `event_id`.
+
+    Mutation: pointing the heading back at `/concerts/{event_id}`, the public
+    concert page. Two concerts are seeded, and the assertions are scoped to
+    one group, so a heading carrying the WRONG concert's `event_id` fails too.
+    The public page must survive as the secondary link -- reading what the
+    catalogue already holds is a real need, it is just not this queue's
+    hand-off.
+    """
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        concert_a = await _concert(s, "live-a", "Live A")
+        concert_b = await _concert(s, "live-b", "Live B")
+        await _propose(s, concert_a, label="1次先行")
+        await _propose(s, concert_b, label="2次先行")
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.get("/admin/quiet-ladders/proposals")
+    assert r.status_code == 200
+
+    block = _group_block(r.text, "Live A")
+    assert '<a href="/admin/quiet-ladders/proposals/live-a">Live A</a>' in block, (
+        "the concert heading must open THIS concert's draft page"
+    )
+    assert "/admin/quiet-ladders/proposals/live-b" not in block
+    assert '<a href="/concerts/live-a">' in block, (
+        "the public concert page stays as the secondary link"
+    )
+
+
+async def test_the_link_on_the_heading_actually_renders(client):
+    """The stronger half, and the one a wrong `event_id` cannot pass: the href
+    is READ OFF the rendered queue and fetched. Mutation: any drift between
+    the heading's path and the draft route's decorator -- which the assertion
+    above, comparing a literal against a literal, would not see."""
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        concert = await _concert(s, "bushi", "ブシロード20周年")
+        await _propose(s, concert, label="1次先行")
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.get("/admin/quiet-ladders/proposals")
+    block = _group_block(r.text, "ブシロード20周年")
+    [href] = re.findall(r'<a href="(/admin/quiet-ladders/proposals/[^"]+)"', block)
+
+    drafted = client.get(href)
+    assert drafted.status_code == 200
+    assert "1次先行" in drafted.text
+
+
 # ── The digest DM is the only door in ────────────────────────────────────
 
 DIGEST_BASE_URL = "https://dekimasen.app"

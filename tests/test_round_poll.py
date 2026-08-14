@@ -764,8 +764,11 @@ PAGE_TWO_CLOSES = (
 )
 
 # One reply, two rounds, ONE dedupe key: same label, same opening time,
-# different closing time. `new_proposals` cannot filter this -- it diffs
-# against the rounds the concert HOLDS, and neither of these is held.
+# different closing time. `classify_proposals` cannot filter this -- it diffs
+# against the rounds the concert HOLDS, and it puts each of these in exactly
+# one bucket, so the two tests below feed this same reply to a concert holding
+# nothing (both readings `fresh`) and to one holding the round (both
+# `changed`), which is the only way to reach BOTH `_fold_duplicate_keys` calls.
 DOUBLED_REPLY = """\
 rounds:
   - label: 1次先行抽選
@@ -812,6 +815,41 @@ async def test_two_readings_of_one_round_in_one_reply_keep_the_first(session):
     assert rows[0].closes_at_utc == CLOSES_UTC
     assert "2026年1月10日" in rows[0].evidence_yaml
     # And the discard is named, because this module names every discard.
+    assert any("second reading of the same round" in r for r in report.rejections)
+
+
+async def test_two_readings_of_one_CHANGED_round_keep_the_first_too(session):
+    """The SECOND fold call, on the `changed` bucket -- and the reason this
+    test exists is that the one above cannot reach it.
+
+    `classify_proposals` puts a proposed round in exactly one bucket, and the
+    test above seeds a concert holding NO round at all, so both its readings
+    land in `fresh` and the `changed` fold beside it is never exercised.
+    Deleting `changed = _fold_duplicate_keys(changed, ...)` from `_poll_one`
+    left all 22 tests in this file green.
+
+    The concert here HOLDS the round -- same label, same opening minute, no
+    closing time -- so both readings are `changed`, and unfolded they do the
+    same damage they do in `fresh`: the second SELECTs the row the first just
+    flushed and overwrites its closing time and its evidence, with the tally
+    reading two.
+    """
+    await _approve(session)
+    await _concert(session, "doubled-changed", rounds=[("1次先行抽選", OPENS_UTC)])
+
+    async def fetch(url):
+        return PAGE_TWO_CLOSES
+
+    report = await run_round_poll(
+        session, NOW, fetcher=fetch, chat=fake_chat(DOUBLED_REPLY)
+    )
+
+    rows = await _proposals(session)
+    assert len(rows) == 1
+    assert (report.changed_proposals, report.new_proposals) == (1, 0)
+    # The FIRST reading owns the row, exactly as in the `fresh` bucket.
+    assert rows[0].closes_at_utc == CLOSES_UTC
+    assert "2026年1月10日" in rows[0].evidence_yaml
     assert any("second reading of the same round" in r for r in report.rejections)
 
 

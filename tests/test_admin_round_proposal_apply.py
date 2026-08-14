@@ -332,6 +332,16 @@ async def test_applying_a_CHANGED_proposal_is_REFUSED_by_the_route(client):
     the page -- it POSTs the URL directly, exactly as a stale tab or a curl
     would -- and asserts BOTH halves: the refusal, and that no second `Round`
     appeared beside the one the concert already holds.
+
+    WHICH of the route's two refusals answers here is deliberately NOT pinned,
+    and the distinction is worth stating so nobody reads more into this test
+    than it holds: the form below submits the proposal's own opening time
+    UNEDITED, so the submitted round shares its dedupe key with the held one
+    and the SUBMITTED-side duplicate check catches it. Delete the stored-side
+    `classify_stored_proposal` refusal alone and this test stays green.
+    `test_a_CHANGED_proposal_stays_refused_even_with_an_edited_opening_time`
+    below is what pins that one, by moving the opening time out from under the
+    duplicate check.
     """
     async with client.db() as s:
         await ensure_user(s, ADMIN_ID, "reiji")
@@ -735,9 +745,19 @@ async def test_an_edited_value_is_what_gets_written(client):
     submitted `round_closes_at`. The two are deliberately DIFFERENT here, and
     the assertion names both -- so a route that silently ignored the operator's
     correction and wrote the model's original cannot pass.
+
+    All FOUR anchors are submitted with a value, and that is the point of the
+    two the operator types in fresh: every other `_form()` in this file sends
+    `round_results_at` and `round_payment_at` EMPTY, and `_propose` defaults
+    both stored columns to None, so before this the payment field could be
+    replaced by `""` inside the `build_round(...)` call and all 23 tests here
+    stayed green -- the deadline a user is meant to pay by, dropped on the
+    floor with `sync_concert` arming a queue that never mentions it.
     """
     corrected_jst = "2099-06-30T21:00"
     corrected_utc = jst_to_utc(datetime(2099, 6, 30, 21, 0))
+    payment_jst = "2099-07-08T23:59"
+    payment_utc = jst_to_utc(datetime(2099, 7, 8, 23, 59))
     async with client.db() as s:
         await ensure_user(s, ADMIN_ID, "reiji")
         concert = await _concert(s)
@@ -748,7 +768,11 @@ async def test_an_edited_value_is_what_gets_written(client):
     login_as(client, ADMIN_ID, "reiji")
     r = client.post(
         _apply_url("live-a", proposal_id),
-        data=_form(round_closes_at=corrected_jst, round_results_at="2099-07-05T18:00"),
+        data=_form(
+            round_closes_at=corrected_jst,
+            round_results_at="2099-07-05T18:00",
+            round_payment_at=payment_jst,
+        ),
     )
     assert r.status_code == 303
 
@@ -758,8 +782,12 @@ async def test_an_edited_value_is_what_gets_written(client):
             "the FORM's corrected closing time must win, not the proposal's stored one"
         )
         assert rounds[0].closes_at_utc != CLOSES_UTC
-        # A field the model never filled at all, typed in by the operator.
+        # Two fields the model never filled at all, typed in by the operator.
         assert rounds[0].results_at_utc == jst_to_utc(datetime(2099, 7, 5, 18, 0))
+        assert rounds[0].payment_deadline_at_utc == payment_utc, (
+            "the submitted payment deadline must reach the round -- the only "
+            "anchor no other test in this file ever sends with a value"
+        )
 
 
 # ── The page is actually WIRED to the two routes ────────────────────────

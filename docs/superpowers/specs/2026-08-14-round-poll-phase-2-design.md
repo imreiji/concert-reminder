@@ -6,7 +6,13 @@ as PR #156 (merged 2026-08-13) and is described in
 phase 2's POLICY, and this one designs its interior.
 
 The small shape of entry #2 — a round-gap dimension on the discovery matcher —
-remains out of scope and stays on the list.
+remains out of scope and stays on the list. [Correction, 2026-08-14, added
+after this build's final review: shipping the large shape triggered
+`WISHLIST.md`'s post-feature revision pass, which moved that small shape onto
+its own merits at **#4** and gave old-#2 to a different entry entirely. The
+"#2" in this document is the number it carried on the day the design was
+written, and is left standing as the dated record it is — read every "#2"
+below as today's **#4**.]
 
 ## Where phase 1 left it
 
@@ -188,6 +194,7 @@ is missing for half the rows.
 
 - Applying a CHANGED proposal (owner ruling; the editor link is the path).
 - The small shape of entry #2 (a round-gap dimension on the discovery matcher).
+  [Correction, 2026-08-14: **#4** today — see the note at the top of this file.]
 - Editing anything other than the proposal being applied — no bulk apply, no
   concert-level edits from this page.
 - The remaining WISHLIST #24 gap: if one reply proposes the same round twice,

@@ -248,6 +248,42 @@ async def test_applies_to_labels_defaults_to_empty_not_null(session):
     assert stored.applies_to_labels is not None
 
 
+async def test_the_writer_coerces_every_leg_label_to_a_stripped_string(session):
+    """`upsert_proposal` is the WRITER, and its `[str(leg).strip() for ...]` is
+    two guards on one line -- each needing its own leg to bite on.
+
+    The poll's `_applies_to_labels` coerces too, and that duplication is
+    deliberate (see this function's own comment): the writer's copy is the one
+    nothing can route around, and phase 2's apply path adds more callers. But
+    duplication with only ONE test is duplication nothing defends -- deleting
+    `.strip()` at EITHER site alone left the whole suite green, because
+    `test_leg_labels_are_stored_as_the_strings_verify_matched` in
+    `test_round_poll.py` runs through the poll and either copy alone satisfies
+    it. This calls the writer DIRECTLY, so only the writer's copy can pass it.
+
+    * `str()` -- `date(2026, 1, 5)`, which a model's unquoted `2026-01-05`
+      resolves to. `json.dumps` refuses it, so without the coercion the flush
+      raises `StatementError` and, in the poll, abandons the whole run.
+    * `.strip()` -- `"　夜　"` in IDEOGRAPHIC SPACE (U+3000), the character
+      CLAUDE.md records SQLite's own `trim()` not touching. Without it the
+      stored label is not the label `verify_rounds` matched, so the review page
+      looks the leg up, finds nothing, and a round naming a real leg renders as
+      naming an unmatched one -- silently. `str(date(...))` carries no
+      whitespace, so the date leg cannot exercise this even in principle.
+    """
+    from datetime import date
+
+    concert = await _concert(session)
+    proposal = await _propose(
+        session, concert, applies_to_labels=[date(2026, 1, 5), "　夜　"]
+    )
+    proposal_id = proposal.id
+    session.expire_all()
+
+    stored = await session.get(RoundProposal, proposal_id)
+    assert stored.applies_to_labels == ["2026-01-05", "夜"]
+
+
 async def test_a_dismissed_key_is_reported_so_the_next_poll_can_skip_it(session):
     """Mutation: dismissed_keys_for returning an empty set -- a dismissed
     proposal then comes back tomorrow and every day after.

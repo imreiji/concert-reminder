@@ -231,9 +231,11 @@ measurement or an incident that a reasonable-looking edit would undo.
   it. Read the module docstring before touching `round_poll.py` and the module
   docstring of `web/routes/quiet_ladders.py` before touching the apply/dismiss
   routes -- both are unusually thorough and most of what follows here is a
-  shorter pointer into them. The phase-1 bullets below (stamping, dedupe key,
-  the wall-clock budget, the digest) are unchanged by phase 2; what follows
-  them is phase 2's own set.
+  shorter pointer into them. The phase-1 bullets below (stamping, the dedupe
+  key, the wall-clock budget, the digest) are unchanged by phase 2 in their
+  REASONING; the `_fold_duplicate_keys` bullet is the one exception and says so
+  in place, because phase 2 gave it a second bucket to fold. What follows them
+  is phase 2's own set.
   - **`Concert.ladder_polled_at_utc` is a THIRD stamp, deliberately not a reuse
     of `ladder_rechecked_at_utc`.** The latter is the OWNER's "I looked at
     this" and is what orders `/admin/quiet-ladders`, the worklist a human
@@ -301,18 +303,30 @@ measurement or an incident that a reasonable-looking edit would undo.
     dismissed "opens Sept 3" would never be shown "opens Sept 10" at all --
     silently, since a key collision looks identical to no proposal.
   - **`_fold_duplicate_keys` collapses two readings of ONE key inside a single
-    reply, and it is not the same de-dupe `new_proposals` does.**
-    `new_proposals` diffs the proposed rounds against the ones the concert
-    HOLDS; two candidates that differ only in `apply_closes_jst` or in which
-    legs they name are neither held, so both survive it, both reach
-    `upsert_proposal`, and the second's SELECT finds the row the first just
-    flushed. That is CONTENT LOST, not merely a tally one too high: the second
-    reading silently overwrites the first's closing time and evidence quotes,
-    and both count as new because the row still carries today's
-    `first_seen_at`. First sighting wins the row and the collapse is named in
-    the digest, because this module names every discard. It runs BEFORE the
-    dismissed check, or a duplicate of a refused key would count as two
-    dismissals of one round.
+    reply, and it is not the same de-dupe `classify_proposals` does.**
+    `classify_proposals` (`domain/round_proposals.py`) diffs the proposed
+    rounds against the ones the concert HOLDS; two candidates that differ only
+    in `apply_closes_jst` or in which legs they name are neither held, so both
+    survive it, both reach `upsert_proposal`, and the second's SELECT finds the
+    row the first just flushed. That is CONTENT LOST, not merely a tally one
+    too high: the second reading silently overwrites the first's closing time
+    and evidence quotes, and both are counted, because the row still carries
+    today's `first_seen_at`. First sighting wins the row and the collapse is
+    named in the digest, because this module names every discard. It runs
+    BEFORE the dismissed check, or a duplicate of a refused key would count as
+    two dismissals of one round. Phase 2 made it run TWICE, once per bucket
+    (`fresh`, then `changed`): `classify_proposals` puts a proposed round in
+    exactly one bucket, so the two can never share a key and each folds against
+    itself alone -- and a doubled reading of a round the concert already holds
+    does exactly the same damage as a doubled new one. The `changed` call is
+    the one nothing defended for a while: every fold test seeded a concert
+    holding no round, so both readings landed in `fresh` and deleting the
+    second call left the file green (`test_round_poll.py`'s
+    `test_two_readings_of_one_CHANGED_round_keep_the_first_too` is what pins it
+    now). NOTE for anything reading an older copy of this bullet: the pure diff
+    was called `new_proposals` until commit `6258683` renamed and re-shaped it
+    into `classify_proposals`; the surviving `new_proposals` is
+    `PollReport.new_proposals`, a COUNTER, which diffs nothing.
   - **The run is bounded by a WALL CLOCK (`ROUND_POLL_BUDGET_SECONDS`, 240s),
     never by a count, and AI triage's 511-lead classify failure does not
     transfer here -- the two failures are shaped differently, not merely
@@ -348,6 +362,16 @@ measurement or an incident that a reasonable-looking edit would undo.
     `upsert_proposal` deliberately never refreshes `first_seen_at` on a
     re-sighting, which is the only thing that lets `_poll_one` tell "created
     today" from "seen again" apart.
+  - **`changed_proposals` is its own counter and must never be summed into
+    `new_proposals`** (phase 2). The two lead to different work: a NEW
+    proposal has an Approve button on the draft page, a CHANGED one has only
+    Dismiss and a link into the concert editor, because phase 2's write path is
+    creates-only (owner ruling, 2026-08-14). Summed, the digest would send the
+    owner looking for a button that is not there on some fraction of what it
+    counted. It takes its insert-vs-resighting split from the same
+    `first_seen_at` test `new_proposals` uses -- a re-sighting increments
+    `refreshed` whichever bucket it came from -- so the two counters mean the
+    same thing about rows and differ only in which verdict produced them.
   - **Every reason line the digest embeds is clipped to `MAX_REASON_CHARS`
     (200), separately from `DIGEST_LIST_LIMIT`'s cap on the LIST.** A
     rejection reason carries model-supplied text verbatim
@@ -376,8 +400,11 @@ measurement or an incident that a reasonable-looking edit would undo.
     nowhere.** A proposal whose round an operator later fixes by hand -- on
     the ordinary concert edit page, not through this feature at all -- simply
     stops matching `anchors_differ` the next time a reader classifies it, and
-    `_draft_row` (`web/routes/quiet_ladders.py`) drops it with no second write
-    anywhere to keep in step. Storing a `changed`/`resolved` flag on the row
+    BOTH readers drop it with no second write anywhere to keep in step --
+    `_draft_row` (`web/routes/quiet_ladders.py`) on the per-concert draft page,
+    and `pending_proposal_groups` (`db/round_proposals.py`) on the review
+    queue, which only joined it in `5d2c471` (see the bullet below).
+    Storing a `changed`/`resolved` flag on the row
     instead would need a second writer to clear it the moment a human's own
     edit made it stale, and a flag with no writer for one of its own
     transitions is exactly the kind of drift this file keeps finding
@@ -399,6 +426,21 @@ measurement or an incident that a reasonable-looking edit would undo.
     would be a `MissingGreenlet` 500, not a clean failure, and a per-concert
     load inside the grouping loop would turn one review-queue render into
     N+1 queries.
+  - **The queue's concert HEADING is the only link to the draft page anywhere
+    in the app, and phase 2 shipped without it.** The chain is digest DM ->
+    `GET /admin/quiet-ladders/proposals` -> `.../proposals/{event_id}`; there
+    is no nav entry to either page by design (an admin-only operational
+    surface), so the heading is not a convenience, it is the sole route in.
+    Every phase-2 route, form and button existed and was reachable only by
+    hand-typing a URL containing an `event_id` -- the heading still pointed at
+    `/concerts/{event_id}`, the PUBLIC page, which phase 1 had rightly given it
+    when there was nothing deeper to open. The public page survives as the
+    secondary link under the heading; the action lives on the heading. Pinned
+    by `test_admin_round_proposals.py`'s
+    `test_each_concert_heading_links_to_its_own_draft_page` (scoped to one
+    concert's group block, since a page-wide assertion has passed on this repo
+    with a whole feature deleted) and by its sibling, which reads the href off
+    the rendered queue and fetches it.
   - **`anchors_differ` (`domain/round_proposals.py`) is the field list TWO
     different comparisons share, on purpose, and the sharing is the fix for a
     real incident, not a style preference.** `_differs` diffs a poll's
@@ -415,11 +457,17 @@ measurement or an incident that a reasonable-looking edit would undo.
     `"resolved"` and is FILTERED OFF the draft page, with no error and no
     digest line -- the exact class of silent miss this whole feature exists to
     remove, reintroduced inside its own review page. The proof the sharing is
-    real: editing `anchors_differ`'s field list breaks assertions in both
-    `test_round_proposals_domain.py` (which exercises `classify_proposals` /
-    `_differs`) and `test_round_proposals_db.py` /
-    `test_admin_round_proposal_draft.py` (which exercise
-    `classify_stored_proposal`) in the same run. Do not re-inline either
+    real: deleting any one field from `anchors_differ`'s list breaks
+    assertions in `test_round_proposals_domain.py` (which exercises
+    `classify_proposals` / `_differs`) AND in `test_round_proposals_db.py`
+    (whose three `test_a_moved_*_alone_is_CHANGED_on_the_stored_side` cases
+    exercise `classify_stored_proposal`, one per field) in the same run -- one
+    edit, two files, which is the whole proof. Those two, and deliberately not
+    `test_admin_round_proposal_draft.py`: that file's only CHANGED fixture
+    differs on `closes_at_utc` alone, so dropping the results or payment clause
+    leaves it green. It renders the PAGE, and per-field fixtures duplicated
+    through a full page render would buy no coverage the db file does not
+    already hold. Do not re-inline either
     caller's copy of this comparison "for locality" -- that is the exact edit
     that shipped the incident once.
   - **`POST .../apply` (`apply_round_proposal`) refuses a duplicate TWICE, on
@@ -484,7 +532,8 @@ measurement or an incident that a reasonable-looking edit would undo.
     reminded of the deadline it names. That is this feature's own failure
     mode, reintroduced by the fix meant to close it, so `sync_concert` runs
     LAST, after `mark_proposal_applied`, inside the same transaction as
-    everything above it, with nothing after it that can fail.
+    everything above it, with nothing but the `session.commit()` that makes the
+    whole thing durable after it.
 - **Outcome correction (`clear_round_outcome`)** -- shipped 2026-08-11, design
   in `docs/superpowers/specs/2026-08-11-outcome-correction-design.md`. The
   un-answer: one idea on two surfaces, and **no new answer button anywhere**. A

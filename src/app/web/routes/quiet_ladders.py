@@ -16,10 +16,10 @@ The worklist route WRITES ONE THING: ladder_rechecked_at_utc. It never edits a
 concert -- there is no update path back in (import answers 409 for a concert
 that exists, invariant 6), so a re-check ends at the concert's edit page or at
 an agent, which is what the copy block is for. The two GET `/proposals` routes
-write nothing either: phase 1 of the round poll
-(docs/superpowers/plans/2026-08-13-round-poll-phase-1.md) shipped the review
-queue read-only and Task 4 of phase 2's plan shipped the per-concert draft
-page the same way, every field pre-filled and every control inert.
+write nothing either -- the review queue is a list, and the draft page is a
+set of pre-filled forms; both only READ. The two POSTs below them are where
+this feature writes, and they are what the draft page's controls submit to
+(Task 4 of phase 2's plan rendered those controls inert; Task 5 wired them).
 
 `/apply` (Task 5) is where that stops, and it is the ONE route in this feature
 that puts a model's reading into the catalogue. Three rules hold it together,
@@ -311,9 +311,13 @@ async def round_proposals(
 ):
     """The round poll's review queue -- the link the digest DM already sends.
 
-    Read-only in phase 1: no buttons, nothing this route writes. `tz` follows
-    the same pattern as outcomes.py/subscriptions.py rather than home.py's
-    fuller context, since this page has no htmx swaps to keep in sync with.
+    Reads only; nothing on it is a control. Each concert HEADING links on to
+    `round_proposal_draft` below, which is where the forms and the two POSTs
+    are -- and that link is the only one to that page anywhere in the app, so
+    the page this route renders is the whole of phase 2's front door. `tz`
+    follows the same pattern as outcomes.py/subscriptions.py rather than
+    home.py's fuller context, since this page has no htmx swaps to keep in
+    sync with.
     """
     groups = await pending_proposal_groups(session)
     db_user = await session.get(User, user.id)
