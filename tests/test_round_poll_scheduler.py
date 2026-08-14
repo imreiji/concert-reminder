@@ -165,13 +165,16 @@ async def test_a_failed_run_is_not_retried_on_the_next_tick(maker, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_a_failing_poll_does_not_roll_back_delivery(maker, monkeypatch):
-    """Why the block owns its try/except and its own commit. The DM is already
-    on the wire by the time the poll runs; a poll that raised into the delivery
-    transaction would roll `sent_at_utc` back and the next tick would send the
-    same notice again.
+async def test_a_failing_poll_does_not_kill_the_tick(maker, monkeypatch):
+    """Why the block owns its try/except and its own commit. Mutation: removing
+    the try/except -- the exception then escapes `tick`, so every block AFTER
+    the poll (today, the triage run) is skipped and the tick's delivered count
+    is lost. A subsystem nobody has to turn on must not be able to take down
+    the one that delivers reminders every minute.
 
-    Mutation: removing the try/except."""
+    The delivered notice is the CONTROL, not the claim: it is committed before
+    this block runs, so a later raise cannot un-send it. What the mutation
+    actually breaks is the return below."""
     monkeypatch.setattr(settings, "round_poll_enabled", True)
     async with maker() as s:
         s.add(User(discord_id=7, username="reiji"))
@@ -181,7 +184,7 @@ async def test_a_failing_poll_does_not_roll_back_delivery(maker, monkeypatch):
 
     _boom(monkeypatch)
 
-    assert await loop_mod.tick(FakeBot()) == 1, "the tick survives"
+    assert await loop_mod.tick(FakeBot()) == 1, "the tick survives and still reports"
 
     async with maker() as s:
         note = (await s.execute(
