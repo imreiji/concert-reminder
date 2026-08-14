@@ -707,12 +707,18 @@ async def run_round_poll(
             )
         except ConcertVanished as exc:
             # Somebody deleted this concert between the candidate list and its
-            # read. ONE concert, not the run -- and deliberately NOT stamped:
-            # `record_ladder_polled` would find the row still in this session's
-            # identity map, issue an UPDATE matching zero rows and raise
-            # `StaleDataError` at flush, which is the very SQLAlchemyError this
-            # carve-out exists to avoid, arriving by the back door. Expunged so
-            # nothing later in the run can read the phantom back out of the map.
+            # read. ONE concert, not the run -- and deliberately NOT stamped.
+            # The hazard is real and was reproduced: with the row still in this
+            # session's identity map, `record_ladder_polled` issues an UPDATE
+            # matching zero rows and raises `StaleDataError` at flush, which is
+            # the very SQLAlchemyError this carve-out exists to avoid, arriving
+            # by the back door. What PREVENTS it is the `expunge` below, not
+            # this `continue`: measured 2026-08-14, either one alone suffices
+            # and only removing BOTH raises. Both are kept -- the expunge so
+            # nothing later in the run reads the phantom back out of the map,
+            # the skip because a concert that no longer exists has nothing to
+            # rotate. Skipping cannot reopen the starvation the poll's own
+            # cursor fixed: `quiet_ladder_rows` can never return a deleted row.
             log.warning("round poll: %s vanished mid-run", row.event_id)
             report.failed += 1
             report.failures.append(f"{row.event_id}: {exc}")

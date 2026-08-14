@@ -261,11 +261,17 @@ measurement or an incident that a reasonable-looking edit would undo.
     concert has gone since `_candidates` loaded it, and that is a failed READ
     on a perfectly usable session, so it costs ONE concert (counted and named,
     exactly as `_candidates` treats the same race one step earlier) rather
-    than the run and its digest. That one is deliberately NOT stamped either:
-    `record_ladder_polled` would find the row still in the identity map, issue
-    an UPDATE matching zero rows and raise `StaleDataError` at flush -- the
-    same abandoned run by the back door -- so the handler expunges and
-    continues. Stamping only successes would let one
+    than the run and its digest. That one is deliberately NOT stamped either,
+    and the hazard behind that is real but was first written down with the
+    wrong cause. With the row still in the identity map,
+    `record_ladder_polled` issues an UPDATE matching zero rows and raises
+    `StaleDataError` at flush -- the same abandoned run by the back door. What
+    PREVENTS that is the `expunge`, not the skip: measured 2026-08-14, either
+    alone suffices and only removing BOTH raises. Both are kept anyway -- the
+    expunge so nothing later reads the phantom back out of the map, the skip
+    because a deleted concert has nothing to rotate -- and the skip cannot
+    reopen starvation, since `quiet_ladder_rows` never returns a deleted row.
+    Stamping only successes, however, WOULD: it would let one
     permanently-broken page -- a 403, a host that redirects off the approved
     set -- hold the head of the queue forever and starve everything behind it,
     reintroducing the same starvation through the sympathetic-looking rule. A

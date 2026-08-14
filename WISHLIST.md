@@ -1606,8 +1606,8 @@ maintenance; the answer was no, with this as the single exception).
 One asyncio loop runs discord.py, FastAPI and the 60-second scheduler tick.
 Four long jobs now share that tick -- the Eventernote sweep, AI triage, AI
 draft completion and, since 2026-08-13, the round poll (title updated from
-"three" on that date; see the revision note under the round poll's Shipped
-entry for why the round poll counts and round watch did not) -- each with a
+"three" on that date; the revision-pass note at the end of Proposed says why
+the round poll counts and round watch did not) -- each with a
 240s wall clock checked only at the TOP of its loop, so each can overshoot by
 one whole iteration. For completion that
 iteration is worst-case ~151s (`COMPLETION_DELAY_SECONDS` 1 +
