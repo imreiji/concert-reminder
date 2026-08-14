@@ -40,10 +40,14 @@ from datetime import datetime
 from app.domain.round_evidence import ProposedRound
 from app.domain.timezones import jst_to_utc
 
-# The field `_proposed_opens_at_utc` reads: the first of `TIMESTAMP_FIELDS`
-# (round_evidence.py), i.e. the round's OWN opening time, not the concert's.
-_OPENS_AT_FIELD = "apply_opens_jst"
-_OPENS_AT_TEXT_FORMAT = "%Y-%m-%d %H:%M"
+# The first two of `TIMESTAMP_FIELDS` (round_evidence.py): the round's OWN
+# opening and closing times, not the concert's. Public because the POLL
+# (`app/round_poll.py`) stores both on a `RoundProposal` and must read them
+# through `proposed_stamp_utc` below rather than parsing that text a second
+# time -- see its docstring.
+OPENS_AT_FIELD = "apply_opens_jst"
+CLOSES_AT_FIELD = "apply_closes_jst"
+_STAMP_TEXT_FORMAT = "%Y-%m-%d %H:%M"
 
 
 @dataclass(frozen=True)
@@ -86,20 +90,40 @@ def dedupe_key(label: str, opens_at_utc: datetime | None) -> str:
     return f"{_normalize_label(label)}|{stamp}"
 
 
-def _proposed_opens_at_utc(proposed: ProposedRound) -> datetime | None:
-    """The round's opening time as aware UTC, or None if absent/unparseable.
+def proposed_stamp_utc(proposed: ProposedRound, field: str) -> datetime | None:
+    """One of a proposed round's JST-text timestamps as aware UTC, or None.
 
     See the module docstring for why this exists: `ProposedRound` has no
-    `opens_at_utc` attribute, only JST text buried in `data`.
+    datetime attributes at all, only the draft vocabulary's
+    `"%Y-%m-%d %H:%M"` JST TEXT buried in `data`.
+
+    ONE conversion, two readers, and that is the point. `new_proposals` below
+    reads `OPENS_AT_FIELD` because the dedupe key is built from it; the poll
+    (`app/round_poll.py`) reads BOTH fields, because a `RoundProposal` row
+    stores the closing time as well as the opening one. A second parse written
+    at that call site would be free to disagree with this one about what counts
+    as a readable stamp -- and the half that fed `dedupe_key` would be the half
+    nobody noticed had drifted, because its symptom is a proposal quietly
+    re-proposed forever rather than an error.
+
+    Absent, blank or not in that exact shape is "no time known" rather than a
+    raise: the same warns-and-skips habit every parser in this package follows,
+    and the only sane response to text a model wrote freehand.
     """
-    text = str(proposed.data.get(_OPENS_AT_FIELD) or "").strip()
+    text = str(proposed.data.get(field) or "").strip()
     if not text:
         return None
     try:
-        naive_jst = datetime.strptime(text, _OPENS_AT_TEXT_FORMAT)
+        naive_jst = datetime.strptime(text, _STAMP_TEXT_FORMAT)
     except ValueError:
         return None
     return jst_to_utc(naive_jst)
+
+
+def _proposed_opens_at_utc(proposed: ProposedRound) -> datetime | None:
+    """The round's opening time -- the half of `proposed_stamp_utc` the dedupe
+    key is built from."""
+    return proposed_stamp_utc(proposed, OPENS_AT_FIELD)
 
 
 def new_proposals(

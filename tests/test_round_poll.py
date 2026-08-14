@@ -1,0 +1,402 @@
+"""What one round poll does, and what each failure inside it costs.
+
+No network and no key: the fetcher and the LLM client are injected, exactly as
+`run_sweep`, `run_triage` and `run_completion` take theirs.
+
+The failure this suite exists to catch is invisible by construction -- a real
+deadline the model found, discarded without a reason, looks identical to a page
+that had nothing on it. So the assertions below are about what is COUNTED and
+what REASON is recorded, not merely about what ended up in the table.
+"""
+
+from datetime import UTC, datetime
+
+import pytest
+import yaml
+from sqlalchemy import select
+
+from app import round_poll as rp
+from app.db.models import Concert, ConcertDay, FetchDomain, Round, RoundProposal
+from app.db.service import (
+    decide_fetch_domain,
+    ensure_user,
+    note_fetch_domain,
+)
+from app.domain.types import RoundKind
+from app.llm import LlmReply
+from app.round_poll import run_round_poll
+
+NOW = datetime(2026, 8, 13, 12, 0, tzinfo=UTC)
+USER_ID = 42
+HOST = "eplus.jp"
+URL = "https://eplus.jp/sf/detail/1234"
+
+# Captured BEFORE the autouse fixture below patches it away, so the politeness
+# test can still assert what production actually waits.
+REAL_DELAY = rp.ROUND_POLL_DELAY_SECONDS
+
+PAGE = (
+    "<html><body><p>1次先行抽選 受付開始 2026年1月5日(月)12:00 "
+    "申込締切 2026年1月10日(土)23:59</p></body></html>"
+)
+
+GOOD_REPLY = """\
+rounds:
+  - label: 1次先行抽選
+    kind: lottery_round
+    apply_opens_jst: 2026-01-05 12:00
+    apply_closes_jst: 2026-01-10 23:59
+    evidence:
+      apply_opens_jst: "受付開始 2026年1月5日(月)12:00"
+      apply_closes_jst: "申込締切 2026年1月10日(土)23:59"
+"""
+
+# Same shape, quoting a line the page does not contain: the fabricated deadline
+# `verify_rounds` exists to refuse.
+UNGROUNDED_REPLY = """\
+rounds:
+  - label: 2次先行抽選
+    kind: lottery_round
+    apply_closes_jst: 2026-02-20 23:59
+    evidence:
+      apply_closes_jst: "申込締切 2026年2月20日(金)23:59"
+"""
+
+OPENS_UTC = datetime(2026, 1, 5, 3, 0, tzinfo=UTC)    # 2026-01-05 12:00 JST
+CLOSES_UTC = datetime(2026, 1, 10, 14, 59, tzinfo=UTC)  # 2026-01-10 23:59 JST
+
+
+@pytest.fixture(autouse=True)
+def _no_pause(monkeypatch):
+    """A real 1s pause per concert would cost the suite a second per fetch.
+    `test_the_pass_pauses_before_every_fetch` pins the production value."""
+    monkeypatch.setattr(rp, "ROUND_POLL_DELAY_SECONDS", 0)
+
+
+def fake_chat(reply_text):
+    async def _chat(system, user, **kw):
+        return LlmReply(text=reply_text, tokens_in=100, tokens_out=50)
+    return _chat
+
+
+def recording_fetch(*, fail_on: str | None = None):
+    """A fetcher that records what it was asked for. Returns (fetch, calls) so
+    a test can assert a fetch did NOT happen -- raising instead would be
+    swallowed by the pass's own per-concert except and counted as a failure."""
+    calls: list[str] = []
+
+    async def _fetch(url):
+        calls.append(url)
+        if fail_on is not None and fail_on in url:
+            raise RuntimeError("boom")
+        return PAGE
+    return _fetch, calls
+
+
+async def _concert(session, event_id, *, official_url=URL, rounds=(), polled_at=None):
+    """One QUIET concert: a future leg and no future anchor on any round."""
+    await ensure_user(session, USER_ID, "reiji")
+    concert = Concert(
+        title=event_id, event_id=event_id, official_url=official_url,
+        created_by=USER_ID, ladder_polled_at_utc=polled_at,
+    )
+    session.add(concert)
+    await session.flush()
+    session.add(ConcertDay(
+        concert_id=concert.id, label="Day 1",
+        starts_at_utc=datetime(2026, 12, 1, 10, 0, tzinfo=UTC),
+    ))
+    for label, opens_at_utc in rounds:
+        session.add(Round(
+            concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND,
+            label=label, opens_at_utc=opens_at_utc,
+        ))
+    await session.flush()
+    return concert
+
+
+async def _approve(session, host=HOST):
+    # FetchDomain.decided_by is an FK to users, and PRAGMA foreign_keys=ON:
+    # approving before any concert is seeded needs the row to exist first.
+    await ensure_user(session, USER_ID, "reiji")
+    domain = await note_fetch_domain(session, host, f"https://{host}/x", NOW)
+    await decide_fetch_domain(session, domain.id, True, NOW, USER_ID)
+    return domain
+
+
+async def _proposals(session):
+    return list((await session.execute(
+        select(RoundProposal).order_by(RoundProposal.id)
+    )).scalars())
+
+
+async def test_a_grounded_round_becomes_a_pending_proposal(session):
+    """The positive control the rest of the suite is measured against, asserted
+    field by field on the ROW: `upsert_proposal` writing a wrong column, or the
+    JST->UTC conversion being skipped, would leave a proposal that reads fine
+    in a count and names the wrong hour on the page."""
+    await _approve(session)
+    concert = await _concert(session, "grew")
+    fetch, calls = recording_fetch()
+
+    report = await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+
+    assert calls == [URL]
+    assert (report.polled, report.new_proposals, report.failed) == (1, 1, 0)
+    assert (report.tokens_in, report.tokens_out) == (100, 50)
+    [proposal] = await _proposals(session)
+    assert proposal.concert_id == concert.id
+    assert proposal.label == "1次先行抽選"
+    assert proposal.kind is RoundKind.LOTTERY_ROUND
+    assert proposal.opens_at_utc == OPENS_UTC
+    assert proposal.closes_at_utc == CLOSES_UTC
+    assert proposal.source_url == URL
+    assert proposal.first_seen_at == NOW
+    assert proposal.dismissed_at is None and proposal.applied_at is None
+    # The quote a reviewer judges the claim by. Without it the page is a guess.
+    assert yaml.safe_load(proposal.evidence_yaml) == {
+        "apply_opens_jst": "受付開始 2026年1月5日(月)12:00",
+        "apply_closes_jst": "申込締切 2026年1月10日(土)23:59",
+    }
+    # The poll's own stamp, and ONLY the poll's own stamp: writing the owner's
+    # would silently mark /admin/quiet-ladders' worklist as attended.
+    assert concert.ladder_polled_at_utc == NOW
+    assert concert.ladder_rechecked_at_utc is None
+
+
+async def test_a_concert_with_no_official_url_is_skipped_and_counted(session):
+    """A quiet concert nobody gave a page is a fact worth reporting, not an
+    error. Mutation: crashing on the None, or skipping without counting."""
+    await _approve(session)
+    await _concert(session, "no-url", official_url=None)
+    fetch, calls = recording_fetch()
+
+    report = await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+
+    assert report.skipped_no_url == 1
+    assert (report.polled, report.failed, report.concerts_seen) == (0, 0, 1)
+    assert calls == []
+    assert await _proposals(session) == []
+
+
+async def test_an_unknown_host_is_recorded_pending_and_the_concert_skipped(session):
+    """Mutation: fetching anyway. BOTH halves are asserted -- the row alone
+    would pass with the fetch still firing, which is the whole point of the
+    approval gate."""
+    await _concert(session, "unknown", official_url="https://tickets.example.com/a")
+    fetch, calls = recording_fetch()
+
+    report = await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+
+    assert calls == []
+    assert report.skipped_host == 1
+    assert (report.polled, report.failed, report.skipped_declined) == (0, 0, 0)
+    [domain] = (await session.execute(select(FetchDomain))).scalars().all()
+    assert domain.host == "tickets.example.com"
+    assert domain.approved_at is None and domain.declined_at is None
+
+
+async def test_a_declined_host_is_skipped_and_not_re_proposed(session):
+    """Mutation: treating declined like unknown, which puts a host a human
+    already refused back in front of them as a pending approval."""
+    await ensure_user(session, USER_ID, "reiji")  # FetchDomain.decided_by is an FK
+    domain = await note_fetch_domain(
+        session, "declined.example.com", "https://declined.example.com/first", NOW
+    )
+    await decide_fetch_domain(session, domain.id, False, NOW, USER_ID)
+    await _concert(session, "declined", official_url="https://declined.example.com/second")
+    fetch, calls = recording_fetch()
+
+    report = await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+
+    assert calls == []
+    assert report.skipped_declined == 1
+    assert report.skipped_host == 0 and report.polled == 0
+    # One row, still declined, still remembering the URL the approver was shown.
+    rows = (await session.execute(select(FetchDomain))).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].declined_at == NOW
+    assert rows[0].approved_at is None
+    assert rows[0].first_seen_url == "https://declined.example.com/first"
+
+
+async def test_an_ungrounded_round_is_rejected_with_its_reason(session):
+    """`verify_rounds`' job, and the most important check in this file.
+    Mutation: trusting the model's reply. The REASON is asserted, not merely
+    the round's absence -- 'dropped silently' and 'rejected with a reason' must
+    not look the same to this test."""
+    await _approve(session)
+    await _concert(session, "ungrounded")
+    fetch, _calls = recording_fetch()
+
+    report = await run_round_poll(
+        session, NOW, fetcher=fetch, chat=fake_chat(UNGROUNDED_REPLY)
+    )
+
+    assert await _proposals(session) == []
+    assert report.new_proposals == 0
+    assert report.rounds_rejected == 1
+    # The page WAS read and the model DID answer: a refused round is not a
+    # failed concert, and reporting it as one would hide a working poll.
+    assert (report.polled, report.failed) == (1, 0)
+    assert len(report.rejections) == 1
+    assert report.rejections[0].startswith("ungrounded: ")
+    assert "2次先行抽選" in report.rejections[0]
+    assert "not on the page" in report.rejections[0]
+
+
+async def test_one_concert_failing_does_not_stop_the_run(session):
+    """Mutation: letting the exception escape. The middle page dies; the third
+    concert must still be polled, and the death must be named."""
+    await _approve(session)
+    await _concert(session, "first", official_url="https://eplus.jp/first")
+    await _concert(session, "second", official_url="https://eplus.jp/boom")
+    third = await _concert(session, "third", official_url="https://eplus.jp/third")
+    fetch, calls = recording_fetch(fail_on="boom")
+
+    report = await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+
+    assert sorted(calls) == [
+        "https://eplus.jp/boom", "https://eplus.jp/first", "https://eplus.jp/third",
+    ]
+    assert (report.polled, report.failed) == (2, 1)
+    assert len(report.failures) == 1
+    assert report.failures[0].startswith("second: ")
+    assert "boom" in report.failures[0]
+    # The concert behind the failure was really polled, not merely counted.
+    assert third.id in {p.concert_id for p in await _proposals(session)}
+
+
+async def test_a_round_the_concert_already_holds_is_not_proposed(session):
+    """End-to-end over the pure diff: the model re-reads a page it read before
+    and re-offers a round the catalogue already has. Mutation: dropping the
+    `new_proposals` diff, which re-proposes every existing round every day."""
+    await _approve(session)
+    await _concert(session, "held", rounds=[("1次先行抽選", OPENS_UTC)])
+    fetch, _calls = recording_fetch()
+
+    report = await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+
+    assert await _proposals(session) == []
+    assert report.new_proposals == 0
+    # Grounded, just not new: this must not be reported as a rejection either.
+    assert (report.polled, report.rounds_rejected, report.failed) == (1, 0, 0)
+
+
+async def test_a_dismissed_proposal_is_not_proposed_again(session):
+    """The daily poll re-reads the same page forever, so a dismissal that did
+    not stick would come back tomorrow and every day after. Mutation: dropping
+    the `dismissed_keys_for` check."""
+    await _approve(session)
+    await _concert(session, "dismissed")
+    fetch, _calls = recording_fetch()
+    await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+    [proposal] = await _proposals(session)
+    proposal.dismissed_at = NOW
+    await session.flush()
+
+    later = datetime(2026, 8, 14, 12, 0, tzinfo=UTC)
+    report = await run_round_poll(session, later, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+
+    assert report.new_proposals == 0
+    assert report.skipped_dismissed == 1
+    rows = await _proposals(session)
+    assert len(rows) == 1 and rows[0].dismissed_at == NOW
+
+
+async def test_the_wall_clock_budget_stops_the_run_and_says_so(session, monkeypatch):
+    """Mutation: dropping `budget_exhausted` from the report -- a truncation
+    only the journal knows about is the silent degradation this repo keeps
+    finding. Mutation: dropping the break, which holds the reminder tick for as
+    long as the catalogue takes."""
+    await _approve(session)
+    await _concert(session, "a", official_url="https://eplus.jp/a")
+    await _concert(session, "b", official_url="https://eplus.jp/b")
+    fetch, calls = recording_fetch()
+
+    ticks = {"n": 0}
+
+    def fake_monotonic():
+        # Once for the deadline, once per concert: the second concert is the
+        # one the clock refuses.
+        ticks["n"] += 1
+        return 0.0 if ticks["n"] <= 2 else 10_000.0
+
+    monkeypatch.setattr(rp, "monotonic", fake_monotonic)
+
+    report = await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+
+    assert report.budget_exhausted is True
+    assert report.polled == 1
+    assert len(calls) == 1
+    # Exactly one concert was attempted, and the other is untouched -- it is
+    # still a candidate tomorrow rather than silently marked read.
+    concerts = (await session.execute(select(Concert))).scalars().all()
+    assert [c.ladder_polled_at_utc for c in concerts].count(NOW) == 1
+    assert [c.ladder_polled_at_utc for c in concerts].count(None) == 1
+
+
+async def test_the_least_recently_polled_concert_is_read_first(session):
+    """The pass's cursor IS the stamp it writes. `quiet_ladder_rows` orders by
+    `ladder_rechecked_at_utc` -- the OWNER's stamp, which the poll must never
+    touch -- so consumed in that order the sequence is identical on every run
+    and, the moment the budget bites, the tail is never read at all. Mutation:
+    dropping the sort in `_candidates`."""
+    await _approve(session)
+    await _concert(session, "polled-yesterday", official_url="https://eplus.jp/yesterday",
+                   polled_at=datetime(2026, 8, 12, 12, 0, tzinfo=UTC))
+    await _concert(session, "never-polled", official_url="https://eplus.jp/never")
+    await _concert(session, "polled-last-week", official_url="https://eplus.jp/week",
+                   polled_at=datetime(2026, 8, 6, 12, 0, tzinfo=UTC))
+    fetch, calls = recording_fetch()
+
+    await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+
+    assert calls == [
+        "https://eplus.jp/never",
+        "https://eplus.jp/week",
+        "https://eplus.jp/yesterday",
+    ]
+
+
+async def test_the_pass_pauses_before_every_fetch(session, monkeypatch):
+    """Sequential with a pause: parallel requests at a third party is how an IP
+    gets blocked. Mutation: deleting the sleep (the recorded list empties), or
+    setting the delay to zero (the constant assertion below)."""
+    assert REAL_DELAY >= 1.0
+    await _approve(session)
+    await _concert(session, "a", official_url="https://eplus.jp/a")
+    await _concert(session, "b", official_url="https://eplus.jp/b")
+    fetch, calls = recording_fetch()
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds):
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(rp.asyncio, "sleep", fake_sleep)
+
+    await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+
+    assert len(calls) == 2
+    assert sleeps == [rp.ROUND_POLL_DELAY_SECONDS] * 2
+
+
+async def test_fetcher_none_binds_the_runs_approved_hosts_to_the_policy(session, monkeypatch):
+    """Every other test injects a fetcher, so nothing else exercises the one
+    line of production wiring that binds this run's approved-host set to the
+    fetch policy. Mutation: passing an empty set, which refuses every page
+    while every injected-fetcher test stays green."""
+    await _approve(session)
+    await _concert(session, "wired")
+    seen: list[tuple[str, set[str]]] = []
+
+    async def fake_fetch_page(url, hosts):
+        seen.append((url, hosts))
+        return PAGE
+
+    monkeypatch.setattr(rp, "_fetch_page", fake_fetch_page)
+
+    report = await run_round_poll(session, NOW, fetcher=None, chat=fake_chat(GOOD_REPLY))
+
+    assert report.polled == 1
+    assert seen == [(URL, {HOST})]
