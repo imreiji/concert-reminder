@@ -112,6 +112,23 @@ local `.env`, like every secret; `DEEPSEEK_MODEL` and `TRIAGE_ENABLED` are
 configuration and are safe to write down anywhere. Leave all three absent and
 the app runs exactly as before.
 
+**The round poll** (the daily pass that re-reads each quiet concert's own
+official page and records rounds the ladder appears to have grown, as
+proposals at `/admin/quiet-ladders/proposals`) is a fourth key:
+```
+ROUND_POLL_ENABLED=true
+```
+It gates the scheduler pickup the same way `TRIAGE_ENABLED` does, and off it
+costs nothing at all - the tick never runs the pass. It writes no round and
+messages no user: a proposal waits for a human, and a digest DM to
+`ADMIN_WHITELIST` reports every run, including a run that found nothing (its
+absence is the signal that the pass stopped running).
+**It needs the DeepSeek keys above, and the flag alone will not tell you
+so.** The pass makes one LLM call per concert, so with `ROUND_POLL_ENABLED`
+true and `DEEPSEEK_API_KEY`/`DEEPSEEK_MODEL` blank, every concert raises
+`LlmError`, is counted as a failure, and the daily digest is a list of
+nothing but failures. Enable it only alongside the two DeepSeek keys.
+
 **`REHEARSAL_ENABLED` must stay absent or false here.** It registers
 `/admin/rehearsal`, whose whole purpose is a "deliver every reminder now"
 button and a send-any-DM-shape catalogue. When the flag is off the router is

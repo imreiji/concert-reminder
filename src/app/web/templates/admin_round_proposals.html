@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{#- Admin-only operational page: English-only and deliberately NOT wrapped in
+    _(), following admin_deliveries.html/admin_discoveries.html/
+    admin_quiet_ladders.html (see quiet_ladders.py's module docstring).
+    Read-only in phase 1 of the round poll
+    (docs/superpowers/plans/2026-08-13-round-poll-phase-1.md) -- no buttons,
+    no form. Approving or dismissing a proposal is phase 2. -#}
+{% block title %}Round proposals — dekimasen.app{% endblock %}
+{% block content %}
+<h1>Round proposals</h1>
+<p class="dim">
+  Rounds the round poll's daily re-read of each quiet concert's official page
+  says the ladder has grown, still waiting on a human. Nothing here has
+  reached the catalogue yet — every quote below is exactly what the model
+  read, so you can check the claim before anyone acts on it.
+</p>
+
+{% if not groups %}
+<div class="edgecard ok">
+  Nothing is waiting on a review right now.
+</div>
+{% else %}
+{% for group in groups %}
+<h2><a href="/concerts/{{ group.event_id }}">{{ group.title }}</a></h2>
+{#- The count and the AGE: first_seen_at is what the queue is ordered by
+    ("the thing nobody has looked at for a week is the thing to look at"),
+    so without it on the page the operator cannot see the quantity the order
+    in front of them is built on. The exact sighting renders dual like every
+    other time on the site (invariant 1); the age beside it is the plain
+    reading of the same fact. -#}
+{% set fs = dual_lines(group.first_seen, tz) %}
+<p class="dim">
+  {{ group.count }} proposal{{ "" if group.count == 1 else "s" }}, oldest
+  waiting {{ group.waited }}.<br>
+  First seen {{ fs[0] }}<br>{{ fs[1] }}
+</p>
+<table class="tagtable">
+  <thead>
+    <tr><th>Round</th><th>Kind</th><th>Opens</th><th>Closes</th><th>Evidence</th><th></th></tr>
+  </thead>
+  <tbody>
+  {% for row in group.rows %}
+    <tr>
+      <td>{{ row.proposal.label }}</td>
+      <td>{{ row.proposal.kind.value.replace("_", " ") }}</td>
+      <td>
+        {% if row.proposal.opens_at_utc %}
+          {% set ol = dual_lines(row.proposal.opens_at_utc, tz) %}
+          <b>{{ ol[0] }}</b><br>{{ ol[1] }}
+        {% else %}<span class="dim">not stated</span>{% endif %}
+      </td>
+      <td>
+        {% if row.proposal.closes_at_utc %}
+          {% set cl = dual_lines(row.proposal.closes_at_utc, tz) %}
+          <b>{{ cl[0] }}</b><br>{{ cl[1] }}
+        {% else %}<span class="dim">not stated</span>{% endif %}
+      </td>
+      <td>
+        {#- The whole point of the page: the quoted source line beside the
+            claim it grounds, so an operator can check it rather than take it
+            on faith. evidence_yaml is model-supplied text -- autoescaping
+            (no `| safe` anywhere on this page) is what keeps it inert. -#}
+        {% if row.evidence %}
+        <ul class="dim" style="margin:.2em 0;padding-left:1.1em">
+          {% for label, quote in row.evidence %}
+          <li><b>{{ label }}:</b> “{{ quote }}”</li>
+          {% endfor %}
+        </ul>
+        {% else %}<span class="dim">no quoted evidence</span>{% endif %}
+      </td>
+      <td>
+        {#- Today's source_url is the concert's own editor-supplied
+            official_url, not the model's text. Only a cleaned http(s) URL
+            reaches this href, or nothing does -- defence in depth for the
+            day a proposal carries the model's own per-round url, see
+            quiet_ladders.py:_safe_source_url. -#}
+        {% if row.source_url %}
+        <a href="{{ row.source_url }}" target="_blank" rel="noopener">source</a>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% endfor %}
+{% endif %}
+{% endblock %}

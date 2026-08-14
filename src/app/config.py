@@ -66,6 +66,13 @@ class Settings(BaseSettings):
     # a limit anything is expected to reach.
     deepseek_max_tokens: int = 8192
 
+    # Same shape as discovery_enabled and triage_enabled: one config value
+    # switching the whole round-poll subsystem off. Default False so the
+    # feature ships switched off -- turning it on starts re-reading third-party
+    # pages daily and spending a real key, and neither should follow from a
+    # deploy nobody asked for it.
+    round_poll_enabled: bool = False
+
     # Access control: comma-separated Discord user IDs with edit rights
     editor_whitelist: str = ""
     # Access control: comma-separated Discord user IDs who can manage editors

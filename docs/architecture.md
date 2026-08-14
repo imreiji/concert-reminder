@@ -219,6 +219,152 @@ measurement or an incident that a reasonable-looking edit would undo.
     newcomers means NO DM, and at a per-minute cadence that is load-bearing
     rather than tasteful -- a "nothing found" note here would be 1,440 DMs a
     day. Silence is the pass's normal output.
+- **Round poll (`app/round_poll.py`)** -- phase 1 of two, shipped 2026-08-13,
+  design in `docs/superpowers/specs/2026-08-13-round-poll-design.md`, flag-gated
+  by `settings.round_poll_enabled` (off by default). Round watch above answers
+  "which tracked concerts hold no future deadline"; this is what actually
+  RE-VISITS one, once a day, and records what its own official page now says
+  as a `RoundProposal` -- a claim, never a `Round`. Phase 1 writes nothing a
+  user can see; applying a proposal onto a live concert is phase 2, unbuilt.
+  Read the module docstring before touching this file -- it is unusually
+  thorough and most of what follows here is a shorter pointer into it.
+  - **`Concert.ladder_polled_at_utc` is a THIRD stamp, deliberately not a reuse
+    of `ladder_rechecked_at_utc`.** The latter is the OWNER's "I looked at
+    this" and is what orders `/admin/quiet-ladders`, the worklist a human
+    reads. Writing it from the poll -- even to "help" by marking a freshly
+    re-read concert attended -- would silently sink every polled concert to
+    the bottom of that list and tell the owner a human had reviewed something
+    only a model had glanced at. `quiet_ladder_rows` must keep sorting by
+    `ladder_rechecked_at_utc` alone; the poll reads and writes only its own
+    column.
+  - **The resume order is a re-sort the poll does itself, and it is load-
+    bearing -- the plan that specified this pass first assumed it was free and
+    was wrong.** `quiet_ladder_rows` sorts by `ladder_rechecked_at_utc`, the
+    human's stamp, which never moves on the poll's account. Consumed in that
+    order the candidate sequence is byte-identical every run: the moment the
+    240s wall clock bites (see below), the same head of the list is re-read
+    every day and the tail is never reached at all -- the exact starvation
+    `discovery.py`'s own budget comment records ("a fixed start point would
+    have been worse than no budget"). `_candidates` in `round_poll.py`
+    re-sorts the SAME candidate set by `ladder_polled_at_utc` (never-polled
+    first, then oldest poll, stable so `quiet_ladder_rows`' own order survives
+    as the tiebreak) before walking it, which is what makes tomorrow's run
+    resume where today's stopped. Removing that re-sort on the reasoning that
+    "the cursor is already handled" reopens the starvation with no test to
+    catch it, since a short test run never spends the whole budget.
+  - **A concert is stamped when an attempt is SPENT, success or failure
+    alike** -- `record_ladder_polled` runs after `_poll_one` whether it raised
+    or not, with two named exceptions. `SQLAlchemyError` poisons the session
+    and is re-raised to abandon the run. `ConcertVanished` is the carve-out
+    OUT of that rule: `concert_export_yaml` opens with `session.refresh`,
+    which raises `InvalidRequestError` -- a `SQLAlchemyError` -- when the
+    concert has gone since `_candidates` loaded it, and that is a failed READ
+    on a perfectly usable session, so it costs ONE concert (counted and named,
+    exactly as `_candidates` treats the same race one step earlier) rather
+    than the run and its digest. That one is deliberately NOT stamped either,
+    and the hazard behind that is real but was first written down with the
+    wrong cause. With the row still in the identity map,
+    `record_ladder_polled` issues an UPDATE matching zero rows and raises
+    `StaleDataError` at flush -- the same abandoned run by the back door. What
+    PREVENTS that is the `expunge`, not the skip: measured 2026-08-14, either
+    alone suffices and only removing BOTH raises. Both are kept anyway -- the
+    expunge so nothing later reads the phantom back out of the map, the skip
+    because a deleted concert has nothing to rotate -- and the skip cannot
+    reopen starvation, since `quiet_ladder_rows` never returns a deleted row.
+    Stamping only successes, however, WOULD: it would let one
+    permanently-broken page -- a 403, a host that redirects off the approved
+    set -- hold the head of the queue forever and starve everything behind it,
+    reintroducing the same starvation through the sympathetic-looking rule. A
+    concert that cost NO attempt (no URL, an unapproved host) is left
+    unstamped on purpose: it consumed no budget, so it starves nothing, and
+    stamping it would make "when did the poll last actually read this page" a
+    lie.
+  - **`dedupe_key` (`domain/round_proposals.py`) is keyed on the label AND
+    `opens_at_utc`, truncated to MINUTE precision, and both halves matter.**
+    Truncation exists because the two sides of the diff disagree below a
+    minute by construction: a proposed round's open time is always parsed from
+    the draft vocabulary's `"%Y-%m-%d %H:%M"` text and lands on `:00`, while a
+    `Round.opens_at_utc` a human or an AI draft seeded can carry seconds
+    (`yaml_import._dt` accepts a YAML timestamp with seconds verbatim). Skip
+    the truncation and the same real-world round produces two different keys
+    depending on which side of the diff reads it, and is re-proposed every
+    single day forever. Keying on the label ALONE, to "simplify" the key,
+    would instead swallow a moved date: a round whose opening was pushed from
+    Sept 3 to Sept 10 shares the label with the one already on file, so it
+    would read as the SAME round rather than a new offering, and an owner who
+    dismissed "opens Sept 3" would never be shown "opens Sept 10" at all --
+    silently, since a key collision looks identical to no proposal.
+  - **`_fold_duplicate_keys` collapses two readings of ONE key inside a single
+    reply, and it is not the same de-dupe `new_proposals` does.**
+    `new_proposals` diffs the proposed rounds against the ones the concert
+    HOLDS; two candidates that differ only in `apply_closes_jst` or in which
+    legs they name are neither held, so both survive it, both reach
+    `upsert_proposal`, and the second's SELECT finds the row the first just
+    flushed. That is CONTENT LOST, not merely a tally one too high: the second
+    reading silently overwrites the first's closing time and evidence quotes,
+    and both count as new because the row still carries today's
+    `first_seen_at`. First sighting wins the row and the collapse is named in
+    the digest, because this module names every discard. It runs BEFORE the
+    dismissed check, or a duplicate of a refused key would count as two
+    dismissals of one round.
+  - **The run is bounded by a WALL CLOCK (`ROUND_POLL_BUDGET_SECONDS`, 240s),
+    never by a count, and AI triage's 511-lead classify failure does not
+    transfer here -- the two failures are shaped differently, not merely
+    smaller.** Triage's classify pass put N leads into ONE prompt and outgrew
+    DeepSeek's output cap; this pass is one prompt PER CONCERT, so a page that
+    is too long or a reply that is too large is a failure of that one
+    concert, counted in `PollReport.failed` and named in `failures`, never a
+    failure of the run. What a per-item cap cannot bound here is TIME: the run
+    sits inline in the 60s reminder tick, `httpx`'s own timeout is per READ so
+    a server dripping bytes under the size cap can hold a connection open with
+    no deadline at all (which is why `FETCH_DEADLINE_SECONDS` exists on top),
+    and `heartbeat.beat()` fires per concert so a run reading fifteen pages
+    does not page the owner about a perfectly healthy app. Do not add a
+    per-run concert cap in place of the wall clock on the classify precedent;
+    the failure mode it would guard against does not exist here.
+  - **The pass reuses `domain/round_completion.py:completion_prompt` and
+    `domain/round_evidence.py:verify_rounds` VERBATIM rather than owning a
+    second prompt or a second safety rule.** `completion_prompt` already asks
+    a model to fill in a draft's `rounds:` from one page of text, and a
+    concert rendered by `concert_export_yaml` IS such a draft, so the only
+    difference between this pass and AI triage's own phase 2, `draft_completion`,
+    is which candidate list each one walks. A second prompt here would be a second
+    thing to keep in step with `verify_rounds`'s evidence-grounding rule (see
+    the `draft_completion.py` entry above for what that rule guards and why
+    it is shaped the way it is), and the day the two drifted the symptom would
+    be fabricated deadlines, not an error anyone would see.
+  - **`new_proposals` counts ROWS CREATED, not sightings**, and this is not
+    an incidental choice: the pass re-reads the same page every day, so a
+    proposal nobody has reviewed yet is re-diffed and re-`upsert_proposal`'d
+    on every run. Counting sightings would report "1 new proposal" every
+    single morning until the owner acts on it, which trains them to stop
+    reading the one message that also carries the rejection reasons.
+    `upsert_proposal` deliberately never refreshes `first_seen_at` on a
+    re-sighting, which is the only thing that lets `_poll_one` tell "created
+    today" from "seen again" apart.
+  - **Every reason line the digest embeds is clipped to `MAX_REASON_CHARS`
+    (200), separately from `DIGEST_LIST_LIMIT`'s cap on the LIST.** A
+    rejection reason carries model-supplied text verbatim
+    (`round_evidence.py` mints `f"round {label!r}: {reason}"`), so a single
+    label the model invented long enough produces a digest body past
+    Discord's 2,000-character limit even after every list is trimmed down to
+    its last entry -- the shrink loop has nothing left to drop once each list
+    is at one line. Past that limit `discord.py` raises `HTTPException`
+    instead of truncating, `_send_notification` reports `TRANSIENT_FAILURE`,
+    the row is never marked sent, and the digest retries every 60 seconds
+    forever without ever being delivered. Removing the per-line clip on the
+    reasoning that the list cap already bounds the message reopens exactly
+    this: the list cap bounds COUNT, not the length of one entry.
+  - **An empty run still queues a digest**, deliberately unlike
+    `build_discovery_dm`/`build_quiet_ladder_dm`, which both return `""` on
+    nothing found. Those two are worklists, where an empty one is genuinely
+    nothing to do; this is a RUN REPORT for a pass that spends a paid key
+    against third-party pages once a day and keeps no other record of having
+    run (`RoundPollState` carries only `last_run_at`). Its ABSENCE is the
+    signal a broken pass is distinguishable from a quiet one at all -- make
+    this suppress on an empty result and a dead pass looks identical to a
+    healthy quiet day, which is the exact silence this whole feature exists to
+    remove.
 - **Outcome correction (`clear_round_outcome`)** -- shipped 2026-08-11, design
   in `docs/superpowers/specs/2026-08-11-outcome-correction-design.md`. The
   un-answer: one idea on two surfaces, and **no new answer button anywhere**. A

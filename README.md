@@ -169,6 +169,7 @@ Shipped since Phase 12 (no phase numbers assigned, tracked as feature PRs instea
 - [x] A bare `.danger` selector was framing every danger *button*, not just the danger card — measured on a dev server (48.5px vs 88.5px) rather than argued from the CSS, and renamed `.danger-card`
 - [x] Demo parity — the concept demos and the shipped app judged against each other on merit, replacing the standing assumption that the demo is right and the app should change; three app changes, nine demo frames re-synced
 - [x] The Following rework, four phases — `/tags` becomes the follow surface (characters followable, split character/seiyuu chips, an editor mode that swaps click behaviour, search across all three name languages); a dedicated `/following` page manages what you follow, each chip opening its own settings dialog; a follow press swaps one chip instead of reloading the page (923ms → 10.7ms); following a tag links your default preset, and a bulk fill applies it to the follows that have none, never overwriting one you set; Preferences' Following section shrinks to a fixed-height summary. No migration in any of the four phases
+- [x] Round poll, phase 1 of 2 — a flag-gated daily pass (`ROUND_POLL_ENABLED`, off by default) re-reads each quiet concert's own official page with DeepSeek and records what its ladder appears to have grown as reviewable proposals at `/admin/quiet-ladders/proposals`; it writes nothing a user can see yet — applying a proposal onto a live concert is phase 2, unbuilt (WISHLIST #2's large shape)
 
 ## License
 

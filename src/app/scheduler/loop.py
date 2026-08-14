@@ -52,10 +52,13 @@ from app.db.service import (
     pending_triage_run,
     prune_delivery_log,
     queue_delivery_digest,
+    queue_round_poll_digest,
     record_deliveries,
     record_dm_outcome,
+    round_poll_due,
     run_quiet_ladder_pass,
     stamp_discovery_run,
+    stamp_round_poll_run,
     sweep_requested,
 )
 from app.db.session import SessionMaker
@@ -63,6 +66,7 @@ from app.discovery import run_sweep
 from app.domain.types import DeliveryOutcome
 from app.draft_completion import run_completion
 from app.ops import run_checks
+from app.round_poll import build_poll_digest, run_round_poll
 from app.scheduler import heartbeat
 from app.triage import run_triage
 
@@ -318,6 +322,59 @@ async def tick(bot) -> int:
         except Exception:
             log.exception("quiet ladder pass failed; delivery was unaffected")
             await session.rollback()
+
+        # The round poll: once a DAY behind its own flag, and after the quiet
+        # ladder pass above because that is the worklist it reads. Its own
+        # try/except and its own commit, for the same reason every block above
+        # has them -- the least important operation in the tick must never be
+        # able to roll back the most important one, and this one holds the tick
+        # for up to its 240s budget doing paid LLM calls against third-party
+        # pages.
+        #
+        # ONE trigger, not the sweep's two: there is no manual button in phase
+        # 1, so the flag plus the 24h clock is the whole gate. The flag is read
+        # FIRST and short-circuits, so a deployment that has not switched this
+        # on does not even ask the clock.
+        try:
+            if settings.round_poll_enabled and await round_poll_due(session, now):
+                # BEFORE the run, so today's run is spent the moment it starts.
+                # The rollback below takes this with it, which is exactly why
+                # the handler re-stamps.
+                await stamp_round_poll_run(session, now)
+                poll_report = await run_round_poll(session, now)
+                # Queued, never sent (invariant 4): the drain a few lines above
+                # delivers it next tick, which buys retry, ordering and
+                # Forbidden handling for free. The pass itself queues nothing
+                # and commits nothing -- this block owns the transaction, the
+                # daily stamp and the digest.
+                await queue_round_poll_digest(
+                    session, build_poll_digest(poll_report, base_url=settings.base_url)
+                )
+                await session.commit()
+                log.info(
+                    "round poll: %d quiet concert(s), %d polled, %d new proposal(s), "
+                    "%d refreshed, %d round(s) rejected, %d failed%s",
+                    poll_report.concerts_seen, poll_report.polled,
+                    poll_report.new_proposals, poll_report.refreshed,
+                    poll_report.rounds_rejected, poll_report.failed,
+                    " (stopped at its time budget)"
+                    if poll_report.budget_exhausted else "",
+                )
+        except Exception:
+            log.exception("round poll failed; delivery was unaffected")
+            await session.rollback()
+            # The rollback takes the stamp above with it, so re-stamp on the
+            # now-clean transaction -- the discovery block's path, and here with
+            # a fetch and an LLM call attached to every repeat. Without this a
+            # poll that dies on one malformed page leaves round_poll_due true,
+            # runs again 60 seconds later and dies the same way forever. A
+            # failed run still counts as today's run; the next one is tomorrow's.
+            try:
+                await stamp_round_poll_run(session, now)
+                await session.commit()
+            except Exception:
+                log.exception("round poll: could not record the failed run")
+                await session.rollback()
 
         # AI triage runs only when an admin pressed the button: a requested
         # TriageRun row is both the request and the record. Its failure
