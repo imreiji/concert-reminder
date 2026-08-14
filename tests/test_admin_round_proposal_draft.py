@@ -5,8 +5,13 @@ Task 4 of the round-poll phase-2 plan. Every proposal renders as a real form,
 pre-filled with the model's own values, its quoted source line beside every
 field that has one -- and, for a proposal whose round the concert already
 holds under another date, the stored value beside the proposed one with no
-Approve control at all (phase 2's write path is creates-only). No POST route
-exists yet: every button here is `disabled`.
+Approve control at all (phase 2's write path is creates-only).
+
+This file covers the RENDER only. What those controls submit to, and what the
+two POST routes then do with it, is `test_admin_round_proposal_apply.py`
+(Task 5) -- including the check that the route re-derives CHANGED itself, so
+`test_a_CHANGED_proposal_shows_stored_beside_proposed_and_no_apply` below is
+a statement about the page, never about what is authorised.
 """
 
 import re

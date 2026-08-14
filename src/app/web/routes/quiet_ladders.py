@@ -4,6 +4,8 @@
   POST /admin/quiet-ladders/{event_id}/checked   stamp "I re-checked this"
   GET  /admin/quiet-ladders/proposals             the round poll's review queue
   GET  /admin/quiet-ladders/proposals/{event_id}  one concert's proposals, as draft forms
+  POST /admin/quiet-ladders/proposals/{event_id}/{proposal_id}/apply    write the round
+  POST /admin/quiet-ladders/proposals/{event_id}/{proposal_id}/dismiss  never again
 
 Its own module and its own page rather than a section of /admin/discoveries.
 That surface answers "what exists that you are not tracking"; this answers
@@ -13,13 +15,32 @@ argues for splitting on exactly this line, and a router registers whole.
 The worklist route WRITES ONE THING: ladder_rechecked_at_utc. It never edits a
 concert -- there is no update path back in (import answers 409 for a concert
 that exists, invariant 6), so a re-check ends at the concert's edit page or at
-an agent, which is what the copy block is for. `/proposals` and
-`/proposals/{event_id}` write nothing at all -- phase 1 of the round poll
-(docs/superpowers/plans/2026-08-13-round-poll-phase-1.md) ships the review
-queue read-only, and Task 4 of phase 2's plan
-(docs/superpowers/sdd/2026-08-14-round-poll-phase-2) ships the per-concert
-draft page the same way: every field is pre-filled and every control present,
-but nothing here POSTs anywhere yet -- Task 5 wires Approve and Dismiss.
+an agent, which is what the copy block is for. The two GET `/proposals` routes
+write nothing either: phase 1 of the round poll
+(docs/superpowers/plans/2026-08-13-round-poll-phase-1.md) shipped the review
+queue read-only and Task 4 of phase 2's plan shipped the per-concert draft
+page the same way, every field pre-filled and every control inert.
+
+`/apply` (Task 5) is where that stops, and it is the ONE route in this feature
+that puts a model's reading into the catalogue. Three rules hold it together,
+each silent when broken:
+
+* IT CREATES THE ROUND THROUGH THE EDITOR'S OWN SEAM -- `build_round` /
+  `apply_round_fields` / `parse_round_legs` from routes/concerts.py, handed
+  FORM values exactly as the concert editor hands them, never a hand-built
+  `Round`. A second constructor is a second place the JST parse, the
+  at-least-one-bound check and the empty-means-all convention can drift.
+* IT ENDS IN `sync_concert` (invariant 2). `reminder_queue` is a MATERIALIZED
+  outbox: a `Round` written without the sync leaves it untouched, so the row
+  exists, the page says applied, the concert leaves the quiet-ladder worklist
+  -- and nobody is ever reminded of that deadline. That is this feature's own
+  failure mode, reintroduced by its fix, and it looks exactly like success.
+* IT RE-DERIVES CHANGED-NESS ITSELF. Phase 2's write path is creates-only
+  (owner ruling, 2026-08-14) and the template already hides Approve on a
+  CHANGED row -- but a hidden button is not an authorisation check, so the
+  route asks `classify_stored_proposal` again against the concert's LIVE
+  rounds when the POST arrives. Never a stored flag: there isn't one, by
+  design (see that function on why the status is derived every render).
 
 Copy is English-only and NOT wrapped in _(), like /admin/deliveries and
 /admin/discoveries: an operational page only admins see should not cost msgids
@@ -32,26 +53,33 @@ page, are the only ways in.
 from datetime import UTC, datetime
 
 import yaml
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.db.models import ConcertDay, RoundProposal, User
+from app.db.models import Concert, ConcertDay, RoundProposal, User
 from app.db.service import (
     classify_stored_proposal,
     held_rounds_by_key,
+    mark_proposal_applied,
+    mark_proposal_dismissed,
     pending_proposal_groups,
     pending_proposals_for,
     quiet_entry_from_row,
     quiet_ladder_rows,
     record_ladder_checked,
+    sync_concert,
 )
 from app.db.session import get_session
 from app.domain.quiet_ladder_message import build_quiet_ladder_block
 from app.domain.urls import UnsafeURLError, clean_url
 from app.web.auth import SessionUser, require_admin
-from app.web.routes.concerts import get_concert_by_event_id
+from app.web.routes.concerts import (
+    build_round,
+    get_concert_by_event_id,
+    parse_round_legs,
+)
 
 router = APIRouter()
 
@@ -195,6 +223,23 @@ def _leg_selection(proposal: RoundProposal, legs: list[ConcertDay]) -> tuple[set
     return ticked, unmatched
 
 
+def _live_legs(concert: Concert) -> list[ConcertDay]:
+    """The legs a round may newly be assigned to, oldest first.
+
+    The same exclusion `edit_concert_form` applies to its own leg chips: a
+    cancelled leg is nothing useful to newly assign a round to, and
+    `Concert.days`' relationship ordering (`order_by="ConcertDay.
+    starts_at_utc"`) already gives the rest the order an operator reads in.
+
+    ONE function, shared by the page that RENDERS the checkboxes and the route
+    that PARSES them back, because the apply route's every-box-ticked ->
+    empty normalisation is a statement about the boxes the page actually drew.
+    Two copies of "which legs count" that disagreed would make "all of them"
+    mean two different things on the two sides of one submit.
+    """
+    return [d for d in concert.days if not d.cancelled]
+
+
 def _draft_row(
     proposal: RoundProposal, held_by_key: dict, legs: list[ConcertDay]
 ) -> dict | None:
@@ -298,10 +343,10 @@ async def round_proposal_draft(
     """One concert's pending round proposals, each as a real form pre-filled
     with the model's own values -- Task 4 of the round-poll phase-2 plan.
 
-    Read-only, exactly like `/proposals` above: no POST route exists yet, so
-    every control this page renders is inert. Task 5 wires Approve and
-    Dismiss; this route and its template only need to exist, and to be
-    honest about what has NOT been reviewed yet.
+    Reads only; the two POSTs below are what its Approve and Dismiss buttons
+    submit to. A CHANGED row renders no Approve at all (creates-only), and
+    `apply_round_proposal` re-derives that same verdict rather than trusting
+    the absence of the button.
 
     Invariant 6: keyed by `event_id`, resolved through the same
     `get_concert_by_event_id` every other concert-scoped route uses (404 on a
@@ -316,12 +361,7 @@ async def round_proposal_draft(
     db_user = await session.get(User, user.id)
     tz = db_user.timezone if db_user else settings.default_timezone
 
-    # Live legs only, oldest first -- the same exclusion
-    # `edit_concert_form` applies to its own leg chips: a cancelled leg is
-    # nothing useful to newly assign a round to, and `Concert.days`' own
-    # relationship ordering (`order_by="ConcertDay.starts_at_utc"`) already
-    # gives the rest the order an operator expects to read them in.
-    legs = [d for d in concert.days if not d.cancelled]
+    legs = _live_legs(concert)
     held_by_key = held_rounds_by_key(concert.rounds)
 
     rows = [
@@ -336,4 +376,155 @@ async def round_proposal_draft(
             "user": user, "tz": tz, "concert": concert, "legs": legs,
             "rows": rows, "time_fields": _TIME_FIELDS,
         },
+    )
+
+
+async def _pending_proposal(
+    session: AsyncSession, concert: Concert, proposal_id: int
+) -> RoundProposal:
+    """This concert's proposal, still awaiting a human -- or an HTTP error.
+
+    404 for "not this concert's": invariant 6 puts the `event_id` in the URL
+    and the proposal id beside it, and without this check the two are
+    independent -- a proposal id from ANOTHER concert would apply its round
+    onto whichever concert the path named.
+
+    409 for "already handled", which is what makes a double-click, a stale tab
+    or the back button safe. `applied_at` is stamped inside the same
+    transaction as the round it produced, so a second press finds the stamp and
+    stops here rather than putting a second copy of the round on a concert
+    people already hold reminders for. (`classify_stored_proposal` would ALSO
+    refuse that second press -- the round it just created now matches the
+    proposal exactly, which is the `"resolved"` verdict -- but that is a
+    happy accident of this one shape, not a guard: it does not cover a
+    DISMISSED row, and it would not cover an apply whose round was later
+    edited. The stamp is the actual check.)
+    """
+    proposal = await session.get(RoundProposal, proposal_id)
+    if proposal is None or proposal.concert_id != concert.id:
+        raise HTTPException(status_code=404, detail="no such proposal on this concert")
+    if proposal.applied_at is not None or proposal.dismissed_at is not None:
+        raise HTTPException(status_code=409, detail="this proposal has already been handled")
+    return proposal
+
+
+@router.post("/admin/quiet-ladders/proposals/{event_id}/{proposal_id}/apply")
+async def apply_round_proposal(
+    event_id: str,
+    proposal_id: int,
+    round_opens_at: str = Form(""),
+    round_closes_at: str = Form(""),
+    round_results_at: str = Form(""),
+    round_payment_at: str = Form(""),
+    applies_to_days: list[str] = Form(default=[]),
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """Turn one proposal into a real `Round` -- the feature's only write into
+    the catalogue, and the riskiest route in it.
+
+    THE FORM WINS, NOT THE ROW. Every timestamp comes from the four
+    `round_*` fields the draft page renders as inputs, never from
+    `proposal.*_at_utc`. That is the entire reason those fields are editable:
+    the model misreads a 当落発表 date, an admin corrects it in the box, and a
+    route that read the stored proposal instead would silently discard the
+    correction while showing every sign of having taken it.
+
+    THE ROUND IS BUILT BY THE EDITOR'S OWN `build_round`, handed strings, so
+    the JST->UTC parse, the at-least-one-bound 422 and the empty-means-all
+    `applies_to` convention are the concert editor's and cannot drift from it.
+    Its docstring names three callers; this is the fourth. `label` and `kind`
+    are the proposal's own -- the page offers no input for either, since a
+    round whose label an operator wants to rewrite is a round to create in the
+    editor.
+
+    THE LEGS COME BACK THROUGH `parse_round_legs`, the editor's parser, with
+    the checkboxes joined into the space-separated value it already reads
+    (the page renders one box per leg rather than the editor's single hidden
+    chip field, and joining is cheaper than a second parser that could
+    disagree about what a leg id is). `valid_day_ids` is the LIVE legs only --
+    the exact set `_live_legs` drew boxes for -- so a cancelled leg's id typed
+    into the request is dropped rather than assigned.
+
+    EVERY BOX TICKED NORMALISES BACK TO EMPTY. Empty means ALL, and the two
+    readings agree today and disagree the moment a leg is added: a third leg
+    falls outside a frozen `[day1, day2]` array, so the round silently stops
+    applying to it. Storing what the operator MEANT ("all of them") rather
+    than the ids that happened to exist at 3pm is the whole point.
+
+    CHANGED IS REFUSED HERE. See the module docstring; the template hiding the
+    button is presentation, this is the check.
+
+    `sync_concert` LAST, after the round has an id (invariant 2). Nothing
+    below it may fail: the whole thing is one transaction, committed once.
+    """
+    concert = await get_concert_by_event_id(session, event_id)
+    await session.refresh(concert, ["days", "rounds"])
+    proposal = await _pending_proposal(session, concert, proposal_id)
+
+    if classify_stored_proposal(proposal, held_rounds_by_key(concert.rounds)) != "new":
+        raise HTTPException(
+            status_code=409,
+            detail="this concert already holds that round -- edit it on the concert page",
+        )
+
+    legs = _live_legs(concert)
+    live_ids = {d.id for d in legs}
+    applies_to = parse_round_legs(" ".join(applies_to_days), live_ids)
+    if applies_to is not None and set(applies_to) == live_ids:
+        applies_to = None
+
+    round_ = build_round(
+        concert.id,
+        proposal.label,
+        proposal.kind,
+        round_opens_at,
+        round_closes_at,
+        round_results_at,
+        round_payment_at,
+        # The page the poll read, as the round's "apply here" link. Cleaned
+        # through `_safe_source_url` rather than handed straight to
+        # `form_url`: today's value is the concert's own editor-supplied
+        # `official_url`, but the column is heading for the model's own `url:`
+        # (see that helper), and a bad one should cost this round its link,
+        # not answer 422 to an admin who typed nothing wrong.
+        _safe_source_url(proposal.source_url) or "",
+        applies_to=applies_to,
+    )
+    session.add(round_)
+    await session.flush()  # the round needs an id before anything plans against it
+
+    await mark_proposal_applied(session, proposal.id, datetime.now(UTC))
+    await sync_concert(session, concert.id)
+    await session.commit()
+    return RedirectResponse(
+        f"/admin/quiet-ladders/proposals/{event_id}", status_code=303
+    )
+
+
+@router.post("/admin/quiet-ladders/proposals/{event_id}/{proposal_id}/dismiss")
+async def dismiss_round_proposal(
+    event_id: str,
+    proposal_id: int,
+    user: SessionUser = Depends(require_admin),
+    session: AsyncSession = Depends(get_session),
+):
+    """"No, and never again" -- the stamp, and nothing else.
+
+    No `Round`, so no `sync_concert`: there is nothing to schedule, and a
+    dismiss that fell through to the apply path would push the model's
+    unreviewed reading into the catalogue, which is the exact opposite of what
+    was pressed.
+
+    Deliberately does NOT ask `classify_stored_proposal`. Dismiss is the only
+    action a CHANGED row has -- the creates-only rule refuses its APPLY, not
+    its refusal -- and a dismissal it rejected would leave those proposals
+    pending forever, re-proposed by the daily poll every single day.
+    """
+    concert = await get_concert_by_event_id(session, event_id)
+    proposal = await _pending_proposal(session, concert, proposal_id)
+    await mark_proposal_dismissed(session, proposal.id, datetime.now(UTC))
+    await session.commit()
+    return RedirectResponse(
+        f"/admin/quiet-ladders/proposals/{event_id}", status_code=303
     )

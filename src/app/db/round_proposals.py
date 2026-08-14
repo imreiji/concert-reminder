@@ -19,11 +19,16 @@ Three rules this module exists to keep, each silent when broken:
   `ladder_rechecked_at_utc`, which is the OWNER's and orders
   /admin/quiet-ladders. See `record_ladder_polled`.
 
-Phase 1 writes no `dismissed_at` and no `applied_at`: the proposals page ships
-read-only and applying is phase 2. `dismissed_keys_for` and
-`pending_proposals` read both columns from the start anyway, so the pass and
-the page are already correct on the day a button appears -- a filter added
-after the fact is a filter every existing reader is missing.
+Phase 1 wrote neither `dismissed_at` nor `applied_at`: the proposals page
+shipped read-only. `dismissed_keys_for` and `pending_proposals` read both
+columns from the start anyway, so the pass and the page were already correct
+on the day a button appeared -- a filter added after the fact is a filter
+every existing reader is missing. Phase 2's `mark_proposal_applied` /
+`mark_proposal_dismissed` are the two writers of those columns, and the only
+ones: both are pure stamps, and neither touches a `Round` -- creating the
+round is the route's job (`web/routes/quiet_ladders.py`), because a `Round`
+written anywhere without the `sync_concert` beside it is invariant 2's silent
+failure, and this module has no business owning half of that pair.
 """
 
 from collections.abc import Sequence
@@ -165,6 +170,59 @@ async def pending_proposals_for(session: AsyncSession, concert_id: int) -> list[
         )
         .order_by(RoundProposal.first_seen_at, RoundProposal.id)
     )).scalars().all())
+
+
+async def mark_proposal_applied(
+    session: AsyncSession, proposal_id: int, now: datetime
+) -> bool:
+    """Stamp "a human turned this into a real round". Returns False if gone.
+
+    A STAMP AND NOTHING ELSE, and the ordering rule that goes with it lives at
+    the call site: the route creates the `Round`, calls this, then calls
+    `sync_concert`. Without the stamp the proposal stays pending, reappears on
+    the draft page forever, and the next press puts a SECOND copy of the same
+    round on a concert people already hold reminders for.
+
+    `applied_at`, never `dismissed_at`: the two columns answer different
+    questions and `dismissed_keys_for` reads only the second, deliberately --
+    an applied proposal needs no skip list, because the round it produced is
+    what filters it out on the held side next poll (see that function).
+
+    Silent on a row that no longer exists, like `record_ladder_polled`: a
+    concert deleted between the page render and the button press CASCADEs its
+    proposals away, and that is a stale page, not an error worth a traceback.
+    The caller is the one holding a 404's worth of context.
+    """
+    proposal = await session.get(RoundProposal, proposal_id)
+    if proposal is None:
+        return False
+    proposal.applied_at = now
+    await session.flush()
+    return True
+
+
+async def mark_proposal_dismissed(
+    session: AsyncSession, proposal_id: int, now: datetime
+) -> bool:
+    """Stamp "no, never propose this again". Returns False if gone.
+
+    The one that has to STICK. The poll runs daily over the same quiet
+    concerts, so a dismissal that did not persist would come back tomorrow and
+    every day after until the queue is noise nobody reads -- which is why
+    `dismissed_keys_for` exists and why `upsert_proposal` never clears these
+    columns on a re-sighting.
+
+    Writes no `Round` and calls no `sync_concert`, on purpose: there is
+    nothing to schedule. A dismissal that quietly fell through to the apply
+    path would put the model's unreviewed reading straight into the catalogue,
+    which is the exact opposite of what the operator pressed.
+    """
+    proposal = await session.get(RoundProposal, proposal_id)
+    if proposal is None:
+        return False
+    proposal.dismissed_at = now
+    await session.flush()
+    return True
 
 
 def held_rounds_by_key(rounds: Sequence[Round]) -> dict[str, Round]:

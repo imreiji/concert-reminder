@@ -6,9 +6,8 @@
     One concert's pending round proposals, each rendered as a real form
     pre-filled with the model's own values, its quoted source line beside
     every field that has one -- Task 4 of the round-poll phase-2 plan
-    (docs/superpowers/sdd/2026-08-14-round-poll-phase-2). Read-only: no POST
-    route exists yet, so every button below is `disabled` rather than dead --
-    Task 5 wires Approve and Dismiss.
+    (docs/superpowers/sdd/2026-08-14-round-poll-phase-2), wired to its two
+    POST routes by Task 5.
 
     NEW vs CHANGED (`row.status`) is computed at REQUEST TIME by
     `classify_stored_proposal` against the concert's CURRENT rounds, never
@@ -16,7 +15,15 @@
     CHANGED row gets no Approve control at all: Phase 2's write path is
     creates-only (owner ruling, 2026-08-14), so there is nothing this page
     could apply for a round the concert already holds -- its only actions are
-    Dismiss and the link into the concert editor above the list.
+    Dismiss and the link into the concert editor above the list. Hiding the
+    button is PRESENTATION and nothing more: `apply_round_proposal` re-derives
+    the same verdict when the POST arrives, because a stale tab still holds a
+    form whose row was NEW when the page was drawn.
+
+    Dismiss is its own one-button `<form>` beside the Approve form rather than
+    a second submit inside it -- forms cannot nest, and the two go to
+    different URLs. Approve sits outside its form too, reaching it by `form=`
+    exactly as the leg checkboxes above already do.
 
     Styled to match `_editor_round_card.html`'s `.redit`/`.cardtop`/
     `.redit-times` shapes rather than importing its `round_card` macro
@@ -88,9 +95,9 @@
       pre-fills a saved round's own datetime-local inputs
       (`jst(dt).strftime('%Y-%m-%dT%H:%M')`). The leg checkboxes above target
       this form via the `form=` attribute rather than nesting inside it,
-      since they render before it in the DOM. No `action`/`method` yet --
-      there is nothing to submit to. -#}
-  <form id="proposal-form-{{ row.proposal.id }}" data-proposal-form>
+      since they render before it in the DOM. -#}
+  <form id="proposal-form-{{ row.proposal.id }}" data-proposal-form method="post"
+        action="/admin/quiet-ladders/proposals/{{ concert.event_id }}/{{ row.proposal.id }}/apply">
     <input type="hidden" name="proposal_id" value="{{ row.proposal.id }}">
     <div class="redit-times">
       {% for field in time_fields %}
@@ -125,8 +132,11 @@
     </div>
   </form>
   <div class="editor-actions">
-    <button type="button" class="act" disabled>Approve</button>
-    <button type="button" class="act danger" disabled>Dismiss</button>
+    <button type="submit" class="act" form="proposal-form-{{ row.proposal.id }}">Approve</button>
+    <form method="post"
+          action="/admin/quiet-ladders/proposals/{{ concert.event_id }}/{{ row.proposal.id }}/dismiss">
+      <button type="submit" class="act danger">Dismiss</button>
+    </form>
   </div>
   {% else %}
   {#- CHANGED: stored beside proposed, and no Approve anywhere in this
@@ -162,7 +172,10 @@
     {% if row.source_url %}
     <a href="{{ row.source_url }}" target="_blank" rel="noopener">source</a>
     {% endif %}
-    <button type="button" class="act danger" disabled>Dismiss</button>
+    <form method="post"
+          action="/admin/quiet-ladders/proposals/{{ concert.event_id }}/{{ row.proposal.id }}/dismiss">
+      <button type="submit" class="act danger">Dismiss</button>
+    </form>
   </div>
   {% endif %}
 </div>
