@@ -27,9 +27,19 @@ nothing on it, and nobody ever knows to look. So every outcome is COUNTED and
 every discard carries its reason into `PollReport` -- a round `verify_rounds`
 refused (`rejections`), a page that could not be fetched or a reply that could
 not be parsed (`failures`), a concert with no page to read, a host waiting on a
-human, a host a human already refused. A truncated run says so
+human, a host a human already refused, a round the concert already holds, a
+proposal seen again rather than found. A truncated run says so
 (`budget_exhausted`). The counts are what the digest DM reports; the reason
 lists are what makes two different silences distinguishable.
+
+A DAILY PASS RE-PROPOSES EVERYTHING IT HAS NOT BEEN ANSWERED ABOUT, and that
+is why `new_proposals` counts ROWS CREATED rather than sightings. The same
+page yields the same claim tomorrow; `new_proposals` (the pure diff) filters
+only rounds the concert HOLDS and `dismissed_keys_for` only rounds the owner
+REFUSED, so a proposal sitting unreviewed passes both and `upsert_proposal`
+rewrites the row it already has. Counted as new, that would tell the owner
+"1 new proposal" every single day until they act -- which trains them to
+ignore the one message that also carries the rejection reasons.
 
 WHAT IT NEVER DOES. It writes no `Round`: a proposal is a claim about a
 third-party page made by a model, and phase 1 puts nothing in front of a user
@@ -128,8 +138,11 @@ from app.domain.yaml_import import _round_kind
 # The per-host user-agent exceptions, shared rather than copied. That table is
 # a NAMED EXCEPTION PER HOST with a measurement attached to each row (see
 # draft_completion), and it grows: a second copy means a host added for one
-# pass silently 403s in the other, and the symptom -- "the poll finds nothing
-# on eight of twelve concerts" -- looks exactly like a quiet ladder.
+# pass keeps 403ing in the other until somebody notices the row is missing.
+# Not a SILENT failure -- `fetch_html` raises `FetchFailed("HTTP 403")`, which
+# this pass counts and names in `failures` -- but a loud one repeated daily on
+# 8 of the owner's 12 concerts, which is the franchise the catalogue is mostly
+# made of.
 from app.draft_completion import HOST_USER_AGENTS
 from app.fetching import ApprovedPublicHosts, _normalize_host, fetch_html
 from app.scheduler import heartbeat
@@ -172,10 +185,26 @@ class PollReport:
     # send the owner to a screen where there is nothing to press.
     skipped_declined: int = 0
     failed: int = 0
+    # Rows this poll CREATED, never rows it wrote. The pass re-reads the same
+    # page every day, so a proposal nobody has reviewed yet is re-proposed,
+    # re-diffed and re-upserted on every run -- counting those as new would
+    # tell the owner "1 new proposal" every day until they act, which teaches
+    # them to ignore the one message that also carries the rejection reasons.
+    # `upsert_proposal` hands the row back and never refreshes `first_seen_at`
+    # (a re-sighting must not reset "how long has this waited"), so that stamp
+    # is what tells the two apart.
     new_proposals: int = 0
+    # Seen again, still pending, row rewritten with today's reading. Reported
+    # because "the page still says this" is a different fact from silence.
+    refreshed: int = 0
     # Proposed, grounded, new -- and matching a key the owner dismissed. Not
     # silent: a page that keeps re-offering a refused round is worth seeing.
     skipped_dismissed: int = 0
+    # Proposed, grounded -- and the concert already holds it. The ordinary
+    # outcome on a page whose ladder has not moved, and counted for the same
+    # reason as everything else here: an outcome with no counter and no row is
+    # indistinguishable from a page that said nothing at all.
+    skipped_held: int = 0
     rounds_rejected: int = 0
     tokens_in: int = 0
     tokens_out: int = 0
@@ -307,8 +336,12 @@ async def _poll_one(
     )
 
     held = [HeldRound(label=r.label, opens_at_utc=r.opens_at_utc) for r in row.rounds]
+    fresh = new_proposals(held, verdict.accepted)
+    # Grounded, and the concert already has it. The single most common outcome
+    # of a poll and the one most easily left uncounted.
+    report.skipped_held += len(verdict.accepted) - len(fresh)
     dismissed = await dismissed_keys_for(session, row.concert_id)
-    for candidate in new_proposals(held, verdict.accepted):
+    for candidate in fresh:
         opens_at_utc = proposed_stamp_utc(candidate, OPENS_AT_FIELD)
         if dedupe_key(candidate.label, opens_at_utc) in dismissed:
             report.skipped_dismissed += 1
@@ -318,8 +351,13 @@ async def _poll_one(
             candidate.data.get("kind"), f"round {candidate.label!r}", kind_warnings
         )
         for warning in kind_warnings:
+            # Into `rejections` like every other reason, not only the journal:
+            # the round IS stored (as `other`), but "the model named a mechanic
+            # this app does not have" is exactly the sort of thing the digest's
+            # reader needs to see before trusting the kind on a review screen.
             log.info("round poll: %s: %s", row.event_id, warning)
-        await upsert_proposal(
+            report.rejections.append(f"{row.event_id}: {warning}")
+        proposal = await upsert_proposal(
             session,
             row.concert_id,
             label=candidate.label,
@@ -336,7 +374,13 @@ async def _poll_one(
             source_url=url,
             now=now,
         )
-        report.new_proposals += 1
+        # Created today, or seen again. `first_seen_at` is the only honest
+        # discriminator: `upsert_proposal` deliberately never refreshes it, so
+        # a row still carrying today's `now` is one this run inserted.
+        if proposal.first_seen_at == now:
+            report.new_proposals += 1
+        else:
+            report.refreshed += 1
     report.polled += 1
 
 
