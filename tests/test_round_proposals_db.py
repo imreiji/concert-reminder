@@ -11,11 +11,14 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 
-from app.db.models import Concert, RoundProposal
+from app.db.models import Concert, Round, RoundProposal
 from app.db.service import (
+    classify_stored_proposal,
     dismissed_keys_for,
     ensure_user,
+    held_rounds_by_key,
     pending_proposals,
+    pending_proposals_for,
     quiet_ladder_rows,
     record_ladder_polled,
     round_poll_due,
@@ -75,6 +78,30 @@ async def _propose(
 
 async def _count(session) -> int:
     return (await session.execute(select(func.count()).select_from(RoundProposal))).scalar_one()
+
+
+async def _held_round(
+    session,
+    concert: Concert,
+    *,
+    label: str = "1次先行",
+    opens_at_utc: datetime | None = OPENS,
+    closes_at_utc: datetime | None = None,
+    results_at_utc: datetime | None = None,
+    payment_deadline_at_utc: datetime | None = None,
+) -> Round:
+    round_ = Round(
+        concert_id=concert.id,
+        kind=RoundKind.LOTTERY_ROUND,
+        label=label,
+        opens_at_utc=opens_at_utc,
+        closes_at_utc=closes_at_utc,
+        results_at_utc=results_at_utc,
+        payment_deadline_at_utc=payment_deadline_at_utc,
+    )
+    session.add(round_)
+    await session.flush()
+    return round_
 
 
 async def test_a_second_poll_of_the_same_round_updates_rather_than_duplicates(session):
@@ -332,3 +359,122 @@ async def test_polling_does_not_touch_the_human_recheck_stamp(session):
     assert [r.event_id for r in await quiet_ladder_rows(session, NOW)] == [
         "checked-in-march", "checked-yesterday",
     ]
+
+
+# ── classify_stored_proposal: the draft page's NEW/CHANGED/resolved split ──
+#
+# Direct unit tests, not exercised only through the HTTP route
+# (test_admin_round_proposal_draft.py): the round-1 review found this
+# function, `held_rounds_by_key` and `pending_proposals_for` had ZERO direct
+# tests, which is exactly how a reviewer could delete two of three compared
+# fields from `classify_stored_proposal` and leave 37 tests green. Mirrors
+# test_round_proposals_domain.py's per-field CHANGED tests one for one --
+# same reasoning, same "every OTHER field seeded identical" shape, so a
+# mutation that drops one field's comparison can only be caught by the test
+# built for that field.
+
+
+async def test_classify_stored_proposal_is_new_with_no_held_round(session):
+    """Mutation: `held_by_key.get` returning something truthy unconditionally.
+    An empty dict is the ordinary case for a genuinely new round."""
+    concert = await _concert(session)
+    proposal = await _propose(session, concert, closes_at_utc=CLOSES)
+    assert classify_stored_proposal(proposal, {}) == "new"
+
+
+async def test_classify_stored_proposal_is_resolved_when_every_anchor_matches(session):
+    """The "resolves itself" case: an operator already applied this exact
+    change by hand. Mutation: returning "changed" here (see the CHANGED
+    tests below, which invert this) or "new" -- either misreports a proposal
+    with nothing left to review."""
+    concert = await _concert(session)
+    held = await _held_round(
+        session, concert, closes_at_utc=CLOSES, results_at_utc=RESULTS,
+        payment_deadline_at_utc=PAYMENT,
+    )
+    proposal = await _propose(
+        session, concert, closes_at_utc=CLOSES, results_at_utc=RESULTS,
+        payment_deadline_at_utc=PAYMENT,
+    )
+    held_by_key = held_rounds_by_key([held])
+    assert classify_stored_proposal(proposal, held_by_key) == "resolved"
+
+
+async def test_a_moved_closing_date_alone_is_CHANGED_on_the_stored_side(session):
+    """Mutation: comparing results/payment but not closes. Results and
+    payment are seeded IDENTICAL so this can only pass by comparing closes."""
+    concert = await _concert(session)
+    held = await _held_round(
+        session, concert, closes_at_utc=CLOSES, results_at_utc=RESULTS,
+        payment_deadline_at_utc=PAYMENT,
+    )
+    moved_closes = CLOSES + timedelta(days=3)
+    proposal = await _propose(
+        session, concert, closes_at_utc=moved_closes, results_at_utc=RESULTS,
+        payment_deadline_at_utc=PAYMENT,
+    )
+    held_by_key = held_rounds_by_key([held])
+    assert classify_stored_proposal(proposal, held_by_key) == "changed"
+
+
+async def test_a_moved_results_date_alone_is_CHANGED_on_the_stored_side(session):
+    """Mutation: comparing closes but not results. Closes (and payment) are
+    seeded IDENTICAL so this can only pass by comparing results -- the exact
+    field the round-1 reviewer found undefended."""
+    concert = await _concert(session)
+    held = await _held_round(
+        session, concert, closes_at_utc=CLOSES, results_at_utc=RESULTS,
+        payment_deadline_at_utc=PAYMENT,
+    )
+    moved_results = RESULTS + timedelta(days=3)
+    proposal = await _propose(
+        session, concert, closes_at_utc=CLOSES, results_at_utc=moved_results,
+        payment_deadline_at_utc=PAYMENT,
+    )
+    held_by_key = held_rounds_by_key([held])
+    assert classify_stored_proposal(proposal, held_by_key) == "changed"
+
+
+async def test_a_moved_payment_deadline_alone_is_CHANGED_on_the_stored_side(session):
+    """Mutation: comparing results but not payment. Same shape: every other
+    field (opens, closes, results) is seeded IDENTICAL -- the other field the
+    round-1 reviewer found undefended."""
+    concert = await _concert(session)
+    held = await _held_round(
+        session, concert, closes_at_utc=CLOSES, results_at_utc=RESULTS,
+        payment_deadline_at_utc=PAYMENT,
+    )
+    moved_payment = PAYMENT + timedelta(days=3)
+    proposal = await _propose(
+        session, concert, closes_at_utc=CLOSES, results_at_utc=RESULTS,
+        payment_deadline_at_utc=moved_payment,
+    )
+    held_by_key = held_rounds_by_key([held])
+    assert classify_stored_proposal(proposal, held_by_key) == "changed"
+
+
+async def test_held_rounds_by_key_keys_on_label_and_opens_not_row_order(session):
+    """Mutation: keying on the round's id or list position instead of
+    `dedupe_key(label, opens_at_utc)` -- `classify_stored_proposal` looks a
+    proposal up by that exact key, so a differently-keyed dict would answer
+    "new" for every round that actually IS held."""
+    concert = await _concert(session)
+    held = await _held_round(session, concert, label="1次先行", opens_at_utc=OPENS)
+    other = await _held_round(
+        session, concert, label="2次先行", opens_at_utc=OPENS + timedelta(days=7),
+    )
+    by_key = held_rounds_by_key([held, other])
+    assert by_key[dedupe_key("1次先行", OPENS)] is held
+    assert by_key[dedupe_key("2次先行", OPENS + timedelta(days=7))] is other
+
+
+async def test_pending_proposals_for_scopes_to_one_concert(session):
+    """Mutation: querying without the `concert_id` filter (falling back to
+    `pending_proposals`'s whole-table scan). Two concerts seeded so a missing
+    filter is visible rather than accidentally correct."""
+    concert_a = await _concert(session, "live-a")
+    concert_b = await _concert(session, "live-b")
+    on_a = await _propose(session, concert_a, label="1次先行")
+    await _propose(session, concert_b, label="他公演先行")
+
+    assert [p.id for p in await pending_proposals_for(session, concert_a.id)] == [on_a.id]

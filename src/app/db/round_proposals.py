@@ -36,7 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.db.core import ensure_user
 from app.db.models import Concert, Notification, Round, RoundPollState, RoundProposal, User
-from app.domain.round_proposals import dedupe_key
+from app.domain.round_proposals import anchors_differ, dedupe_key
 from app.domain.types import RoundKind
 
 # One poll a day, the discovery sweep's cadence and for the same reason: the
@@ -189,37 +189,44 @@ def classify_stored_proposal(proposal: RoundProposal, held_by_key: dict[str, Rou
     time this runs, with no second write anywhere to keep in step -- the same
     "resolves itself" property the review page's docstring promises.
 
-    NOT a call to `domain.round_proposals.classify_proposals` -- a deliberate
-    SECOND comparison, not a second implementation of the first one, and the
-    reason is a type mismatch rather than a style choice. `classify_proposals`
-    diffs `ProposedRound`s, whose four anchors are JST TEXT living under
-    `ProposedRound.data`, read through `proposed_stamp_utc` at compare time. A
-    `RoundProposal` row already stores those same four anchors as typed, aware
-    UTC columns -- `upsert_proposal` ran the model's JST text through that
-    exact converter ONCE, at write time. Routing them back through JST text a
-    second time just to hand them to `_differs` would be a lossy round trip
-    (JST text truncates to the minute) bought for no benefit, since the
-    comparison below is otherwise identical.
-
-    MUST AGREE WITH `_differs` FIELD FOR FIELD, and does: the three non-key
-    anchors compared are `closes_at_utc`, `results_at_utc` and
-    `payment_deadline_at_utc`. `opens_at_utc` is excluded for the identical
-    reason `_differs` excludes it -- it is half of `dedupe_key`, the very key
-    `held_by_key` was already looked up by, so comparing it again could only
-    ever read False.
+    The DIFFERS check is `domain.round_proposals.anchors_differ`, the SAME
+    predicate `_differs` calls -- not a second copy of "these three fields,
+    opens excluded". A `RoundProposal` row already stores its three anchors as
+    typed, aware UTC columns (`upsert_proposal` ran the model's JST text
+    through `proposed_stamp_utc` once, at write time), so they are handed to
+    `anchors_differ` directly. Note for anyone tempted to justify that by
+    "avoiding a lossy round trip": routing them back through JST text and
+    re-parsing would NOT actually lose anything here -- `proposed_stamp_utc`
+    only ever produces `:00` seconds/microseconds, and JST is a fixed +09:00
+    offset with no DST, so UTC -> JST -> "%Y-%m-%d %H:%M" text -> UTC is exact
+    for every value this column can hold. The real reason this function does
+    not call `_differs` directly is a SHAPE mismatch, not a precision one:
+    `_differs` wants a `ProposedRound` keyed by
+    `apply_closes_jst`/`results_jst`/`payment_deadline_jst`, and wrapping a
+    `RoundProposal` row in one just to satisfy that shape would be more
+    machinery than the three-line comparison it exists to reach -- which is
+    exactly why that comparison was pulled out into `anchors_differ` instead,
+    so both shapes can call the SAME code without either constructing the
+    other's wrapper.
 
     The key is `proposal.dedupe_key`, the column `upsert_proposal` wrote
     through `domain.round_proposals.dedupe_key` at insert time -- read back
     rather than recomputed, so this always matches on the exact key the writer
-    minted, never a second derivation of it.
+    minted, never a second derivation of it. `held_by_key` holds `Round` ORM
+    rows, not `HeldRound` wrappers (see `held_rounds_by_key`'s own docstring
+    for why); `anchors_differ` only ever reads the three attributes both types
+    name identically, so handing it a `Round` where it is typed for a
+    `HeldRound` is the same duck-typing `held_rounds_by_key` already relies on
+    to skip constructing one.
     """
     held = held_by_key.get(proposal.dedupe_key)
     if held is None:
         return "new"
-    if (
-        proposal.closes_at_utc != held.closes_at_utc
-        or proposal.results_at_utc != held.results_at_utc
-        or proposal.payment_deadline_at_utc != held.payment_deadline_at_utc
+    if anchors_differ(
+        held,
+        proposal.closes_at_utc,
+        proposal.results_at_utc,
+        proposal.payment_deadline_at_utc,
     ):
         return "changed"
     return "resolved"

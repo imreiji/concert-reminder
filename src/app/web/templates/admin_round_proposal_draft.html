@@ -99,6 +99,18 @@
         <input type="datetime-local" name="{{ field.name }}"
                value="{{ jst(dt).strftime('%Y-%m-%dT%H:%M') if dt else '' }}">
       </label>
+      {#- DELIBERATELY DIVERGES from `_editor_round_card.html`, which shows a
+          JST-only input with no dual reading anywhere beside it. That page is
+          where an editor TYPES a time they already know, in JST -- a second
+          zone would be noise on data they are entering fresh. This page is
+          where an admin JUDGES whether a time a MODEL read off a third-party
+          page is plausible, and an admin outside JST has no way to sanity-
+          check a bare JST value at a glance, so unlike the editor, invariant
+          1's dual (JST + local) reading rides beside the input here too. -#}
+      {% if dt %}
+      {% set dl = dual_lines(dt, tz) %}
+      <p class="dim tiny">{{ dl[0] }} — {{ dl[1] }}</p>
+      {% endif %}
       {% if row.evidence.get(field.label) %}
       <p class="dim tiny">Read from the page: “{{ row.evidence[field.label] }}”</p>
       {% else %}

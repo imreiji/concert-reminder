@@ -186,17 +186,54 @@ def classify_proposals(
     return Classified(fresh=fresh, changed=changed)
 
 
+def anchors_differ(
+    held: HeldRound,
+    closes_at_utc: datetime | None,
+    results_at_utc: datetime | None,
+    payment_deadline_at_utc: datetime | None,
+) -> bool:
+    """True when any of the three non-key anchors disagree with `held`.
+
+    THE FIELD LIST LIVES HERE, AND ONLY HERE. Two callers need this exact
+    disjunction -- `_differs` below (diffing a poll's `ProposedRound` against
+    a concert's held rounds) and the draft page's
+    `db.round_proposals.classify_stored_proposal` (diffing an already-STORED
+    `RoundProposal` row, whose three anchors are typed UTC columns, against
+    the same held rounds). A copy of this comparison living separately at each
+    call site is exactly the kind of drift this project keeps finding: it was
+    tried once, and a reviewer deleted two of the three fields from the
+    second copy while 37 tests stayed green, because nothing forced the two
+    definitions to agree.
+
+    Takes plain `datetime | None` values for the proposed side, not a
+    `ProposedRound` or a `RoundProposal` ORM row -- the two real callers hold
+    the same three facts in two different shapes (JST TEXT needing
+    `proposed_stamp_utc` on one side, typed UTC columns already on the other),
+    and a shape this function does not ask for is a shape it cannot silently
+    come to prefer.
+
+    `opens_at_utc`/`OPENS_AT_FIELD` is excluded on purpose, on both sides: it
+    is half of the dedupe key the caller already matched `held` on to find it,
+    so comparing it again here would always read False.
+    """
+    return (
+        closes_at_utc != held.closes_at_utc
+        or results_at_utc != held.results_at_utc
+        or payment_deadline_at_utc != held.payment_deadline_at_utc
+    )
+
+
 def _differs(held: HeldRound, proposed: ProposedRound) -> bool:
     """True when any of the three non-key timestamps disagree.
 
-    `OPENS_AT_FIELD` is excluded on purpose: it is half of the dedupe key
-    `classify_proposals` already matched on to find `held`, so comparing it
-    again here would always read False."""
-    for field, stored in (
-        (CLOSES_AT_FIELD, held.closes_at_utc),
-        (RESULTS_AT_FIELD, held.results_at_utc),
-        (PAYMENT_AT_FIELD, held.payment_deadline_at_utc),
-    ):
-        if proposed_stamp_utc(proposed, field) != stored:
-            return True
-    return False
+    Delegates the comparison itself to `anchors_differ` -- see its docstring
+    for why that function, not this one, owns the field list. What stays HERE
+    is the one piece genuinely specific to a `ProposedRound`: turning its JST
+    TEXT into aware UTC, through `proposed_stamp_utc`, once per field.
+    """
+    return anchors_differ(
+        held,
+        proposed_stamp_utc(proposed, CLOSES_AT_FIELD),
+        proposed_stamp_utc(proposed, RESULTS_AT_FIELD),
+        proposed_stamp_utc(proposed, PAYMENT_AT_FIELD),
+    )
