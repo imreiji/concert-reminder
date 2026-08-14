@@ -233,8 +233,15 @@ async def test_applying_stamps_applied_at_and_the_proposal_leaves_pending(client
 
 async def test_a_second_apply_is_refused_and_creates_no_duplicate_round(client):
     """The other half of the stamp: a stale page, a double-click or a back
-    button must not put the same round on the concert twice. Mutation:
-    dropping the already-handled guard in the route."""
+    button must not put the same round on the concert twice.
+
+    HONEST ABOUT WHAT IT PINS. It does NOT catch the already-handled guard
+    going missing -- once the first press created the matching round, the
+    second press is refused by the duplicate checks instead, so removing that
+    guard leaves this test green. What it pins is that a double press is
+    refused AT ALL, by some path, and creates no second round. The guard's own
+    coverage is `test_a_dismissed_proposal_cannot_then_be_applied`, the one
+    ordering no duplicate check can see."""
     async with client.db() as s:
         await ensure_user(s, ADMIN_ID, "reiji")
         concert = await _concert(s)
@@ -349,6 +356,255 @@ async def test_applying_a_CHANGED_proposal_is_REFUSED_by_the_route(client):
             "the refusal must leave the concert's rounds untouched"
         )
         assert (await s.get(RoundProposal, proposal_id)).applied_at is None
+
+
+async def test_a_CHANGED_proposal_stays_refused_even_with_an_edited_opening_time(client):
+    """What the STORED-side refusal alone still pins, now that a second one
+    guards duplicates -- otherwise it would be dead code.
+
+    Same CHANGED row as the test above, but the submitted opening time is
+    moved to a moment the concert holds no round at. The submitted key then
+    differs from every held key, so the duplicate check passes cleanly and
+    only `classify_stored_proposal` can refuse. It must: the page renders no
+    Approve on a CHANGED row at all (creates-only, owner ruling 2026-08-14),
+    and a route that answered 303 to the same row POSTed directly would make
+    that rendering a suggestion rather than the rule.
+
+    Mutation: delete the stored-side refusal. Nothing else in this file
+    notices -- every other CHANGED case submits an unedited opening time, so
+    the duplicate check catches those -- and this one answers 303 with a
+    second round on the concert.
+    """
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        concert = await _concert(s)
+        s.add(Round(
+            concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="1次先行",
+            opens_at_utc=OPENS, closes_at_utc=datetime(2099, 6, 20, 14, 59, tzinfo=UTC),
+        ))
+        await s.flush()
+        proposal = await _propose(s, concert)  # same label + opens -> CHANGED
+        concert_id, proposal_id = concert.id, proposal.id
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.post(
+        _apply_url("live-a", proposal_id),
+        # A moment the concert holds no round at, so the duplicate guard is
+        # satisfied and this is purely the creates-only rule talking.
+        data=_form(round_opens_at="2026-09-02T12:00"),
+    )
+    assert r.status_code == 409, "a CHANGED row must stay refused however its form was edited"
+
+    async with client.db() as s:
+        assert len(await _rounds(s, concert_id)) == 1
+        assert (await s.get(RoundProposal, proposal_id)).applied_at is None
+
+
+async def test_a_corrected_opening_time_cannot_duplicate_a_held_round(client):
+    """THE ordinary flow the editable fields exist for, and it used to answer
+    303 with two identical rounds on the concert.
+
+    The concert already holds `1次先行` opening 2026-09-01 12:00 JST. The model
+    misread the opening DATE, so the proposal's dedupe key differs and it
+    classifies "new" -- correctly, on what was stored. The admin does exactly
+    what the boxes are there for and corrects the opening time back to 12:00,
+    then presses Approve.
+
+    The stored-side refusal cannot see this: it keys off `proposal.label` /
+    `proposal.opens_at_utc` while the round is built from the FORM, and
+    `opens_at_utc` is BOTH half the dedupe key and an editable field. So the
+    route asks the duplicate question again of the round about to be written.
+
+    Mutation: delete the `dedupe_key(round_.label, round_.opens_at_utc) in
+    held_by_key` check. Every other test in this file stays green -- the
+    stored-side refusal still covers a proposal whose opens was NOT edited --
+    and the concert quietly ends up holding the same round twice, with
+    `sync_concert` arming a reminder for each: the duplicate-reminder failure
+    this phase exists to prevent, reached through its own happy path.
+    """
+    misread_opens = datetime(2026, 9, 8, 3, 0, tzinfo=UTC)  # JST 2026-09-08 12:00
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        concert = await _concert(s)
+        s.add(Round(
+            concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="1次先行",
+            opens_at_utc=OPENS, closes_at_utc=CLOSES_UTC,
+        ))
+        await s.flush()
+        proposal = await _propose(s, concert, opens_at_utc=misread_opens)
+        concert_id, proposal_id = concert.id, proposal.id
+        await s.commit()
+
+    async with client.db() as s:
+        # The premise: on what was STORED this really is a new round, so the
+        # stored-side refusal lets it through and only the submitted-side one
+        # can catch it. Without this the test could pass for the wrong reason.
+        from app.db.service import classify_stored_proposal, held_rounds_by_key
+
+        concert = await s.get(Concert, concert_id)
+        await s.refresh(concert, ["rounds"])
+        stored = await s.get(RoundProposal, proposal_id)
+        assert classify_stored_proposal(stored, held_rounds_by_key(concert.rounds)) == "new"
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.post(
+        _apply_url("live-a", proposal_id),
+        # The correction: back to the opening time the concert already holds.
+        data=_form(round_opens_at="2026-09-01T12:00"),
+    )
+    assert r.status_code == 409, (
+        "a submission correcting the opening time onto a held round must be refused"
+    )
+
+    async with client.db() as s:
+        assert len(await _rounds(s, concert_id)) == 1, (
+            "the correction duplicated a round the concert already holds"
+        )
+        assert (await s.get(RoundProposal, proposal_id)).applied_at is None
+
+
+# ── What gets written beyond the timestamps ─────────────────────────────
+
+
+async def test_the_round_carries_the_proposals_kind(client):
+    """Mutation: hardcoding `RoundKind.LOTTERY_ROUND` instead of
+    `proposal.kind`. Every other fixture in this file uses the default kind,
+    so nothing would notice -- while `round_poll.py:_round_kind` demonstrably
+    reads other kinds out of the model's text, and kind drives board column
+    precedence and the round's whole vocabulary on the concert page."""
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        concert = await _concert(s)
+        proposal = await _propose(
+            s, concert, label="一般発売", kind=RoundKind.GENERAL_SALE,
+        )
+        concert_id, proposal_id = concert.id, proposal.id
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    assert client.post(_apply_url("live-a", proposal_id), data=_form()).status_code == 303
+
+    async with client.db() as s:
+        rounds = await _rounds(s, concert_id)
+        assert rounds[0].kind is RoundKind.GENERAL_SALE, (
+            "the round must carry the kind the poll read, not a hardcoded one"
+        )
+        assert rounds[0].label == "一般発売"
+
+
+async def test_the_round_carries_the_pages_url(client):
+    """Mutation: passing `""` for the url. The round's "apply here" link is
+    the one thing a reminder DM gives a reader to act on, and it silently
+    arrives empty."""
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        concert = await _concert(s)
+        proposal = await _propose(s, concert, source_url="https://example.jp/live/tickets")
+        concert_id, proposal_id = concert.id, proposal.id
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    assert client.post(_apply_url("live-a", proposal_id), data=_form()).status_code == 303
+
+    async with client.db() as s:
+        rounds = await _rounds(s, concert_id)
+        assert rounds[0].url == "https://example.jp/live/tickets"
+
+
+async def test_an_unsafe_source_url_costs_the_round_its_link_not_a_422(client):
+    """Why `_safe_source_url` and not `form_url` (which raises 422).
+
+    `source_url` is heading for the model's own `url:` (invariant 7), and a
+    stored `javascript:` value must never reach an `href` -- but it also must
+    not dead-end an admin who typed nothing wrong. Mutation: swapping in
+    `form_url`, which answers 422 and leaves the proposal unapplied forever
+    with no way through the page."""
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        concert = await _concert(s)
+        proposal = await _propose(s, concert, source_url="javascript:alert(1)")
+        concert_id, proposal_id = concert.id, proposal.id
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.post(_apply_url("live-a", proposal_id), data=_form())
+    assert r.status_code == 303, "an unsafe stored url must not block the apply"
+
+    async with client.db() as s:
+        rounds = await _rounds(s, concert_id)
+        assert len(rounds) == 1
+        assert rounds[0].url is None, "an unsafe url must be dropped, never stored"
+
+
+# ── A cancelled leg is neither offered nor accepted ─────────────────────
+
+
+async def test_a_cancelled_leg_does_not_break_the_all_ticked_normalisation(client):
+    """Mutation: `live_ids = {d.id for d in concert.days}` instead of
+    `{d.id for d in legs}`.
+
+    Subtler than "a cancelled id gets through". The all-ticked -> empty
+    normalisation compares what was submitted against `live_ids`, and the page
+    only ever DREW boxes for live legs -- so widening that set means ticking
+    every box on the page no longer equals it (`{1,2} != {1,2,3}`) and the
+    explicit list gets frozen after all, silently, on exactly the concerts
+    where a leg has been cancelled."""
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        concert = await _concert(s)
+        day1 = await _leg(s, concert, "Day 1", datetime(2099, 9, 1, 10, 0, tzinfo=UTC))
+        day2 = await _leg(s, concert, "Day 2", datetime(2099, 9, 2, 10, 0, tzinfo=UTC))
+        await _leg(
+            s, concert, "Day 3 (cancelled)", datetime(2099, 9, 3, 10, 0, tzinfo=UTC),
+            cancelled=True,
+        )
+        proposal = await _propose(s, concert)
+        concert_id, proposal_id = concert.id, proposal.id
+        live = [str(day1.id), str(day2.id)]
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.post(_apply_url("live-a", proposal_id), data=_form(applies_to_days=live))
+    assert r.status_code == 303
+
+    async with client.db() as s:
+        rounds = await _rounds(s, concert_id)
+        assert not rounds[0].applies_to, (
+            "every box the page DREW was ticked, so this must normalise to empty even"
+            " though a cancelled leg exists"
+        )
+
+
+async def test_a_cancelled_legs_id_is_dropped_rather_than_assigned(client):
+    """The page draws no box for a cancelled leg, so its id can only arrive by
+    hand. Mutation: widening `valid_day_ids` to every day -- the round then
+    applies to a leg that no longer happens, which `is_round_cancelled` reads
+    as a reason to treat the whole round as cancelled."""
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        concert = await _concert(s)
+        day1 = await _leg(s, concert, "Day 1", datetime(2099, 9, 1, 10, 0, tzinfo=UTC))
+        day2 = await _leg(s, concert, "Day 2", datetime(2099, 9, 2, 10, 0, tzinfo=UTC))
+        dead = await _leg(
+            s, concert, "Day 3 (cancelled)", datetime(2099, 9, 3, 10, 0, tzinfo=UTC),
+            cancelled=True,
+        )
+        proposal = await _propose(s, concert)
+        concert_id, proposal_id = concert.id, proposal.id
+        day1_id, posted = day1.id, [str(day1.id), str(dead.id)]
+        assert day2  # a second live leg, so "the subset" and "all" differ
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.post(_apply_url("live-a", proposal_id), data=_form(applies_to_days=posted))
+    assert r.status_code == 303
+
+    async with client.db() as s:
+        rounds = await _rounds(s, concert_id)
+        assert rounds[0].applies_to == [day1_id], (
+            "a cancelled leg's id must be dropped, not assigned to the round"
+        )
 
 
 # ── Invariant 5 ──────────────────────────────────────────────────────────

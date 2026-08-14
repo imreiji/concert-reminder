@@ -35,12 +35,19 @@ each silent when broken:
   exists, the page says applied, the concert leaves the quiet-ladder worklist
   -- and nobody is ever reminded of that deadline. That is this feature's own
   failure mode, reintroduced by its fix, and it looks exactly like success.
-* IT RE-DERIVES CHANGED-NESS ITSELF. Phase 2's write path is creates-only
-  (owner ruling, 2026-08-14) and the template already hides Approve on a
-  CHANGED row -- but a hidden button is not an authorisation check, so the
-  route asks `classify_stored_proposal` again against the concert's LIVE
-  rounds when the POST arrives. Never a stored flag: there isn't one, by
-  design (see that function on why the status is derived every render).
+* IT REFUSES A DUPLICATE TWICE, ON TWO DIFFERENT QUESTIONS. Phase 2's write
+  path is creates-only (owner ruling, 2026-08-14) and the template already
+  hides Approve on a CHANGED row -- but a hidden button is not an
+  authorisation check, so the route asks `classify_stored_proposal` again
+  against the concert's LIVE rounds when the POST arrives. Never a stored
+  flag: there isn't one, by design. That check alone is NOT ENOUGH, though,
+  and the gap it leaves is on the feature's happy path: it keys off the
+  STORED proposal, while the round is built from the FORM, and
+  `opens_at_utc` is both half the dedupe key and an editable field -- so a
+  misread opening date classifies "new", the admin corrects it back to the
+  real time, and the concert ends up holding the same round twice. The
+  second refusal therefore keys off the round about to be WRITTEN. See
+  `apply_round_proposal`.
 
 Copy is English-only and NOT wrapped in _(), like /admin/deliveries and
 /admin/discoveries: an operational page only admins see should not cost msgids
@@ -73,6 +80,7 @@ from app.db.service import (
 )
 from app.db.session import get_session
 from app.domain.quiet_ladder_message import build_quiet_ladder_block
+from app.domain.round_proposals import dedupe_key
 from app.domain.urls import UnsafeURLError, clean_url
 from app.web.auth import SessionUser, require_admin
 from app.web.routes.concerts import (
@@ -452,8 +460,25 @@ async def apply_round_proposal(
     applying to it. Storing what the operator MEANT ("all of them") rather
     than the ids that happened to exist at 3pm is the whole point.
 
-    CHANGED IS REFUSED HERE. See the module docstring; the template hiding the
-    button is presentation, this is the check.
+    TWO REFUSALS, AND THEY ASK DIFFERENT QUESTIONS. Both are 409s and neither
+    subsumes the other:
+
+    * The STORED one asks "was this proposal a change when it was stored?" and
+      enforces the creates-only ruling as the page states it -- a CHANGED row
+      renders no Approve, and the route agrees rather than trusting the
+      template. It is the check the OWNER's rule names.
+    * The SUBMITTED one asks the only question that actually prevents a
+      duplicate: "would applying THIS SUBMISSION create a round the concert
+      already holds?" It keys off the round about to be WRITTEN, so it sees
+      the operator's corrections. The stored check cannot: `opens_at_utc` is
+      half the dedupe key AND an editable field, so a model that misreads the
+      opening date produces a row that classifies "new" against a round the
+      concert already holds -- and the admin correcting that box back to the
+      real time is exactly what the editable fields are FOR. Before this,
+      that ordinary flow answered 303 and left two identical rounds on the
+      concert, with `sync_concert` dutifully arming reminders for both: the
+      duplicate-reminder failure this phase exists to prevent, reached
+      through its own happy path.
 
     `sync_concert` LAST, after the round has an id (invariant 2). Nothing
     below it may fail: the whole thing is one transaction, committed once.
@@ -461,8 +486,9 @@ async def apply_round_proposal(
     concert = await get_concert_by_event_id(session, event_id)
     await session.refresh(concert, ["days", "rounds"])
     proposal = await _pending_proposal(session, concert, proposal_id)
+    held_by_key = held_rounds_by_key(concert.rounds)
 
-    if classify_stored_proposal(proposal, held_rounds_by_key(concert.rounds)) != "new":
+    if classify_stored_proposal(proposal, held_by_key) != "new":
         raise HTTPException(
             status_code=409,
             detail="this concert already holds that round -- edit it on the concert page",
@@ -491,6 +517,28 @@ async def apply_round_proposal(
         _safe_source_url(proposal.source_url) or "",
         applies_to=applies_to,
     )
+
+    # The duplicate guard, asked of the round about to be written rather than
+    # of the row it came from -- see this function's docstring for the flow
+    # that walks straight past the stored check. `build_round` has already
+    # done the JST parse, so `round_.opens_at_utc` is the submitted opening
+    # time in the same aware-UTC shape a held `Round` carries, and the key
+    # comes from `dedupe_key` and only from `dedupe_key`: it truncates to
+    # minute precision because a live `Round` can carry seconds while a
+    # proposal's parse never can, and a second derivation here is that bug
+    # re-opened (db/round_proposals.py's module docstring).
+    #
+    # `build_round` is called BEFORE this on purpose. It constructs a `Round`
+    # but adds nothing to the session -- `concert_id` is set as a plain FK
+    # column, not through the relationship -- so a refusal below leaves no
+    # pending row behind, and the check gets to read parsed values instead of
+    # re-parsing the form strings itself.
+    if dedupe_key(round_.label, round_.opens_at_utc) in held_by_key:
+        raise HTTPException(
+            status_code=409,
+            detail="this concert already holds a round with that label and opening time",
+        )
+
     session.add(round_)
     await session.flush()  # the round needs an id before anything plans against it
 
