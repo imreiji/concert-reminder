@@ -89,6 +89,24 @@ rounds:
       payment_deadline_jst: "入金期限 2026年1月20日(火)23:59"
 """
 
+# The leg named UNQUOTED, which is how a model writes a bare token and how the
+# prompt's own example writes `applies_to: [Day 1]`. PyYAML resolves it to a
+# `datetime.date`, and `parse_completion_response` stringifies only the four
+# TIMESTAMP_FIELDS -- so this is the one reply shape that reaches the writer
+# carrying a non-string leg. Grounded against the ordinary `PAGE`; the leg
+# label is the only unusual thing here.
+DATE_LEG_REPLY = """\
+rounds:
+  - label: 1次先行抽選
+    kind: lottery_round
+    applies_to: [2026-01-05]
+    apply_opens_jst: 2026-01-05 12:00
+    apply_closes_jst: 2026-01-10 23:59
+    evidence:
+      apply_opens_jst: "受付開始 2026年1月5日(月)12:00"
+      apply_closes_jst: "申込締切 2026年1月10日(土)23:59"
+"""
+
 OPENS_UTC = datetime(2026, 1, 5, 3, 0, tzinfo=UTC)    # 2026-01-05 12:00 JST
 CLOSES_UTC = datetime(2026, 1, 10, 14, 59, tzinfo=UTC)  # 2026-01-10 23:59 JST
 RESULTS_UTC = datetime(2026, 1, 15, 9, 0, tzinfo=UTC)   # 2026-01-15 18:00 JST
@@ -129,8 +147,16 @@ def recording_fetch(*, fail_on: str | None = None):
     return _fetch, calls
 
 
-async def _concert(session, event_id, *, official_url=URL, rounds=(), polled_at=None):
-    """One QUIET concert: a future leg and no future anchor on any round."""
+async def _concert(
+    session, event_id, *, official_url=URL, rounds=(), polled_at=None, leg_label="Day 1"
+):
+    """One QUIET concert: a future leg and no future anchor on any round.
+
+    `leg_label` is a parameter because `ConcertDay.label` is free editor text
+    and a DATE-SHAPED one is ordinary rather than exotic -- see
+    `test_a_date_shaped_leg_label_is_stored_as_a_string`, the one test that
+    needs it.
+    """
     await ensure_user(session, USER_ID, "reiji")
     concert = Concert(
         title=event_id, event_id=event_id, official_url=official_url,
@@ -139,7 +165,7 @@ async def _concert(session, event_id, *, official_url=URL, rounds=(), polled_at=
     session.add(concert)
     await session.flush()
     session.add(ConcertDay(
-        concert_id=concert.id, label="Day 1",
+        concert_id=concert.id, label=leg_label,
         starts_at_utc=datetime(2026, 12, 1, 10, 0, tzinfo=UTC),
     ))
     for label, opens_at_utc in rounds:
@@ -259,6 +285,58 @@ async def test_a_round_naming_no_legs_stores_an_empty_list(session):
     assert proposal.applies_to_labels == []
     assert proposal.results_at_utc is None
     assert proposal.payment_deadline_at_utc is None
+
+
+async def test_a_date_shaped_leg_label_is_stored_as_a_string(session):
+    """A leg labelled `2026-01-05` must not abandon the entire run.
+
+    THE ONLY TEST THAT COVERS THE COERCION, and it exists because the two
+    plausible ways to write that line without it are both green everywhere
+    else: `list(raw)` and `candidate.data.get(APPLIES_TO_FIELD) or []` each
+    pass all 28 tests in this file and its sibling. So the coercion reads like
+    a no-op over an already-`list[str]` value, and the next person deletes it.
+
+    The chain, every link of it ordinary:
+
+    * `ConcertDay.label` is free editor text, and a date is a perfectly normal
+      thing to call a leg of a two-night run;
+    * the model names it the way the prompt's own example names a leg --
+      `applies_to: [Day 1]`, unquoted -- and PyYAML resolves an unquoted
+      `2026-01-05` to a `datetime.date`;
+    * `parse_completion_response` stringifies only the four TIMESTAMP_FIELDS
+      and passes every other key through as resolved, so the `date` survives;
+    * `verify_rounds` ACCEPTS the round, because it compares
+      `str(leg).strip()` against the draft's leg labels -- and the draft dumps
+      that label quoted, so the two match exactly;
+    * the flush then raises `StatementError` wrapping `TypeError: Object of
+      type date is not JSON serializable`, which is a `SQLAlchemyError` -- the
+      one family `run_round_poll` deliberately re-raises rather than absorbs.
+
+    So the cost is not one bad column on one proposal. It is the whole run,
+    every paid call in it, and the digest that would have said why.
+
+    Mutation: dropping `str(...).strip()` at EITHER guard alone is now caught
+    by the other (defence in depth, deliberate); dropping it at both raises
+    out of `run_round_poll` and fails here.
+    """
+    await _approve(session)
+    await _concert(session, "date-legs", leg_label="2026-01-05")
+
+    async def fetch(url):
+        return PAGE
+
+    report = await run_round_poll(
+        session, NOW, fetcher=fetch, chat=fake_chat(DATE_LEG_REPLY)
+    )
+
+    # The round was believed, not refused: this is a coercion test, and it
+    # would be worthless against a round `verify_rounds` had already thrown out.
+    assert (report.polled, report.new_proposals, report.rounds_rejected) == (1, 1, 0)
+    [proposal] = await _proposals(session)
+    assert proposal.applies_to_labels == ["2026-01-05"]
+    # Strings, not something that merely COMPARES equal to one. `date` does
+    # not, but a future coercion that stringified lazily would.
+    assert all(isinstance(leg, str) for leg in proposal.applies_to_labels)
 
 
 async def test_a_concert_with_no_official_url_is_skipped_and_counted(session):
