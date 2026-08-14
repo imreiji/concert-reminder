@@ -254,8 +254,18 @@ measurement or an incident that a reasonable-looking edit would undo.
     catch it, since a short test run never spends the whole budget.
   - **A concert is stamped when an attempt is SPENT, success or failure
     alike** -- `record_ladder_polled` runs after `_poll_one` whether it raised
-    or not (everything except `SQLAlchemyError`, which poisons the session and
-    is re-raised to abandon the run). Stamping only successes would let one
+    or not, with two named exceptions. `SQLAlchemyError` poisons the session
+    and is re-raised to abandon the run. `ConcertVanished` is the carve-out
+    OUT of that rule: `concert_export_yaml` opens with `session.refresh`,
+    which raises `InvalidRequestError` -- a `SQLAlchemyError` -- when the
+    concert has gone since `_candidates` loaded it, and that is a failed READ
+    on a perfectly usable session, so it costs ONE concert (counted and named,
+    exactly as `_candidates` treats the same race one step earlier) rather
+    than the run and its digest. That one is deliberately NOT stamped either:
+    `record_ladder_polled` would find the row still in the identity map, issue
+    an UPDATE matching zero rows and raise `StaleDataError` at flush -- the
+    same abandoned run by the back door -- so the handler expunges and
+    continues. Stamping only successes would let one
     permanently-broken page -- a 403, a host that redirects off the approved
     set -- hold the head of the queue forever and starve everything behind it,
     reintroducing the same starvation through the sympathetic-looking rule. A
@@ -278,6 +288,19 @@ measurement or an incident that a reasonable-looking edit would undo.
     would read as the SAME round rather than a new offering, and an owner who
     dismissed "opens Sept 3" would never be shown "opens Sept 10" at all --
     silently, since a key collision looks identical to no proposal.
+  - **`_fold_duplicate_keys` collapses two readings of ONE key inside a single
+    reply, and it is not the same de-dupe `new_proposals` does.**
+    `new_proposals` diffs the proposed rounds against the ones the concert
+    HOLDS; two candidates that differ only in `apply_closes_jst` or in which
+    legs they name are neither held, so both survive it, both reach
+    `upsert_proposal`, and the second's SELECT finds the row the first just
+    flushed. That is CONTENT LOST, not merely a tally one too high: the second
+    reading silently overwrites the first's closing time and evidence quotes,
+    and both count as new because the row still carries today's
+    `first_seen_at`. First sighting wins the row and the collapse is named in
+    the digest, because this module names every discard. It runs BEFORE the
+    dismissed check, or a duplicate of a refused key would count as two
+    dismissals of one round.
   - **The run is bounded by a WALL CLOCK (`ROUND_POLL_BUDGET_SECONDS`, 240s),
     never by a count, and AI triage's 511-lead classify failure does not
     transfer here -- the two failures are shaped differently, not merely
