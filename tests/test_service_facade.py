@@ -27,7 +27,7 @@ PKG = Path(__file__).resolve().parents[1] / "src" / "app" / "db"
 FEATURE_MODULES = [
     "core", "tags", "drafts", "setup_flow", "rehearsal", "discovery_events",
     "broadcast", "delivery", "calendar_feed", "translation_gaps", "ops_alerts",
-    "phrases", "audit", "venues", "tokens", "quiet_ladders",
+    "phrases", "audit", "venues", "tokens", "quiet_ladders", "round_proposals",
 ]
 
 

@@ -208,6 +208,14 @@ class Concert(Base):
     # both belong to the CURRENT quiet spell, so a concert that goes quiet
     # again arrives unchecked.
     ladder_rechecked_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # The round POLL's stamp -- deliberately a THIRD column rather than reusing
+    # ladder_rechecked_at_utc. That one answers "has a HUMAN looked at this"
+    # and is what orders /admin/quiet-ladders (never-checked first, then oldest
+    # check); a machine writing it would silently mark the owner's worklist
+    # attended and sink every polled concert to the bottom of a list nobody
+    # then re-reads. This one answers only "when did the pass last read this
+    # concert's official page", and nothing but the poll writes it.
+    ladder_polled_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
 
     creator: Mapped["User | None"] = relationship()  # also fixes ORM insert ordering
     days: Mapped[list["ConcertDay"]] = relationship(
@@ -1130,3 +1138,76 @@ class OpsCheckState(Base):
     last_notified_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
     pending_ok: Mapped[bool | None] = mapped_column(Boolean)
     pending_since: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class RoundProposal(Base):
+    """One round a poll of the concert's official page says the ladder has grown.
+
+    A PROPOSAL, never a Round: the pass reads a third-party page with an LLM,
+    and nothing it produces reaches the catalogue without a human. Phase 1
+    only ever writes and dismisses these; applying one is phase 2.
+
+    Pending is BOTH `dismissed_at` and `applied_at` NULL -- the
+    nullable-timestamp idiom `FetchDomain` and `PendingDraft` already use,
+    rather than a status string with its own vocabulary. And, for the same
+    reason FetchDomain gives: a dismissed proposal stays dismissed and is
+    never proposed again. The poll runs DAILY over the same quiet concerts,
+    so a dismissal that did not stick would come back tomorrow, and the day
+    after, until the queue is noise nobody reads.
+    """
+
+    __tablename__ = "round_proposals"
+    __table_args__ = (
+        # What makes the dismissal stick: a re-poll of the same round UPDATES
+        # this row rather than inserting a second one beside it.
+        Index("uq_round_proposal_key", "concert_id", "dedupe_key", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    # CASCADE, unlike PendingDraft.concert_id's SET NULL: a proposal is ABOUT a
+    # concert, not a record of where a concert came from, so it has no meaning
+    # once the concert is gone.
+    concert_id: Mapped[int] = mapped_column(
+        ForeignKey("concerts.id", ondelete="CASCADE"), index=True
+    )
+    # Minted ONLY by domain/round_proposals.py:dedupe_key -- never formatted
+    # here or at a call site. It truncates the open time to minute precision
+    # because the two sides of the diff do not otherwise agree below that, and
+    # a second derivation is that bug re-opened.
+    dedupe_key: Mapped[str] = mapped_column(String(400))
+    label: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[RoundKind] = mapped_column(
+        Enum(RoundKind, values_callable=lambda e: [m.value for m in e])
+    )
+    opens_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    closes_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # field -> the quoted source line, one small YAML document. BESIDE the
+    # proposal, the way PendingDraft.completion_yaml sits beside its draft:
+    # evidence is what a reviewer judges the claim by, not part of the claim.
+    evidence_yaml: Mapped[str] = mapped_column(Text, default="", server_default="")
+    source_url: Mapped[str] = mapped_column(String(1000), default="", server_default="")
+    first_seen_at: Mapped[datetime] = mapped_column(UTCDateTime, default=_now)
+    dismissed_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # Written by phase 2 only; phase 1 never sets it. It is here from the start
+    # so `pending_proposals` can exclude it from the very first query -- a
+    # filter added later is a filter every existing reader is missing.
+    applied_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
+
+
+class RoundPollState(Base):
+    """When the round poll last ran. One row, id=1.
+
+    A table rather than memory for exactly DiscoveryState's reason: the pass
+    is a run of third-party fetches and paid LLM calls, and the scheduler ticks
+    every 60 seconds, so a cadence held in memory would re-run the whole pass
+    on every restart.
+
+    Its OWN row, not a column on DiscoveryState: two passes with two clocks,
+    and sharing one would couple "the Eventernote sweep ran" to "the poll ran"
+    so that either one stamping it silences the other for a day.
+    """
+
+    __tablename__ = "round_poll_state"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    last_run_at: Mapped[datetime | None] = mapped_column(UTCDateTime)
