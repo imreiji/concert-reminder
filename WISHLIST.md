@@ -2382,7 +2382,9 @@ convention are all real options; none has been picked). Raised: 2026-08-13,
 during round poll's own task-6 documentation pass, which needed to run the
 suite and could not.
 
-`pytest -q --collect-only` counts 2,957 tests as of this build (2026-08-14).
+`pytest -q --collect-only` counts 3,019 tests as of this build (2026-08-14,
+round 1 of its own documentation pass -- the count drifts by the pass itself,
+since round 1 added one test to `test_admin_round_proposals.py`).
 A full `uv run pytest -q` run measures at roughly 650 seconds against this
 harness's own foreground command ceiling of 600 seconds (600,000ms) -- so a
 full verification pass can no longer complete inside a single foreground
@@ -2420,14 +2422,21 @@ be APPLIED (phase 2's write path is creates-only by owner ruling), but it is
 SURFACED, which is what this gap was about. See `docs/architecture.md`'s
 Round poll entry for why `anchors_differ` is shared rather than copied.
 
-**CLOSED by phase 2 -- a proposal whose round the owner later adds by hand now
-resolves itself.** `classify_stored_proposal` (`db/round_proposals.py`)
-derives NEW/CHANGED/`"resolved"` at RENDER time rather than storing a flag on
-the row, so a proposal whose round now matches the concert's held rounds
-exactly reads `"resolved"` and `_draft_row` (`web/routes/quiet_ladders.py`)
-filters it off both the review queue and the per-concert draft page -- no
-second write anywhere, and nothing for a stale proposal to be rediscovered
-as. Same architecture.md entry.
+**CLOSED by phase 2, with a gap round 1 of this docs review caught and
+closed too -- a proposal whose round the owner later adds by hand now
+resolves itself, on BOTH pages.** `classify_stored_proposal`
+(`db/round_proposals.py`) derives NEW/CHANGED/`"resolved"` at RENDER time
+rather than storing a flag on the row, so a proposal whose round now matches
+the concert's held rounds exactly reads `"resolved"`. Phase 2 as originally
+built only wired that into `_draft_row`, the PER-CONCERT page; the review
+QUEUE (`pending_proposal_groups`, the page the digest DM actually links to)
+kept listing the same proposal with a phantom pending count, discoverable
+only by drilling into the concert -- the exact worklist-that-never-empties
+failure this gap was filed against, reopened on the one page phase 1's own
+text named by address ("only visible on `/admin/quiet-ladders/proposals`").
+`pending_proposal_groups` now runs the identical `classify_stored_proposal`
+check and drops a concert whose every proposal resolves entirely, so the
+queue empties the same way the draft page does. Same architecture.md entry.
 
 **STILL OPEN -- a doubled proposal in one LLM reply over-counts the
 new-vs-refreshed tally.** `upsert_proposal`'s unique index on

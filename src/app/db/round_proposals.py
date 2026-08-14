@@ -37,6 +37,7 @@ from datetime import datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.db.core import ensure_user
@@ -305,7 +306,18 @@ class ProposalGroup:
 
 
 async def pending_proposal_groups(session: AsyncSession) -> list[ProposalGroup]:
-    """`pending_proposals`, grouped by concert.
+    """`pending_proposals`, grouped by concert, with any proposal already
+    RESOLVED against the concert's CURRENT rounds filtered out.
+
+    Round 1 of this feature's own docs review found this filter MISSING here
+    while `_draft_row` (`web/routes/quiet_ladders.py`) already had it -- a
+    proposal an operator fixed by hand on the ordinary concert editor kept
+    showing on this page (the one the digest DM links to) with a phantom
+    pending count, and only the per-concert draft page ever resolved it.
+    `classify_stored_proposal` is the SAME derivation `_draft_row` uses --
+    never a second comparison written here -- for the reason its own
+    docstring gives: two copies of "is this still worth showing" is exactly
+    the drift `anchors_differ` was pulled out to stop.
 
     A second query rather than a join: `pending_proposals` is the worklist
     ordering every other reader shares, and re-deriving "pending" here with a
@@ -315,6 +327,20 @@ async def pending_proposal_groups(session: AsyncSession) -> list[ProposalGroup]:
     raised, the same warns-and-skips habit every reader in this package
     follows for a third party's page; the review page just shows one fewer
     row rather than 500ing.
+
+    `Concert.rounds` is EAGER-loaded here (`selectinload`), one extra query
+    for the whole batch, never per-concert and never a bare `concert.rounds`:
+    that relationship has no `lazy="raise"` guard the way `venue_tag` does,
+    so an unloaded access during async template rendering is a
+    `MissingGreenlet` 500, not a clean failure. `held_rounds_by_key` is
+    computed once per concert and cached, not once per proposal, since a
+    concert can hold several pending proposals and rebuilding the same dict
+    for each would be pure waste.
+
+    A concert whose every pending proposal resolves this way is dropped from
+    the result ENTIRELY, the same as if it had never had a proposal at all --
+    which is what lets the worklist actually empty rather than showing a
+    group with nothing left in it.
     """
     proposals = await pending_proposals(session)
     if not proposals:
@@ -323,15 +349,24 @@ async def pending_proposal_groups(session: AsyncSession) -> list[ProposalGroup]:
         c.id: c
         for c in (
             await session.execute(
-                select(Concert).where(Concert.id.in_({p.concert_id for p in proposals}))
+                select(Concert)
+                .where(Concert.id.in_({p.concert_id for p in proposals}))
+                .options(selectinload(Concert.rounds))
             )
         ).scalars().all()
     }
+    held_by_concert: dict[int, dict[str, Round]] = {}
     groups: dict[int, ProposalGroup] = {}
     order: list[int] = []
     for proposal in proposals:
         concert = concerts.get(proposal.concert_id)
         if concert is None:
+            continue
+        held_by_key = held_by_concert.get(concert.id)
+        if held_by_key is None:
+            held_by_key = held_rounds_by_key(concert.rounds)
+            held_by_concert[concert.id] = held_by_key
+        if classify_stored_proposal(proposal, held_by_key) == "resolved":
             continue
         group = groups.get(proposal.concert_id)
         if group is None:

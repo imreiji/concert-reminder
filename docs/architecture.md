@@ -375,14 +375,30 @@ measurement or an incident that a reasonable-looking edit would undo.
     time, by `classify_stored_proposal` (`db/round_proposals.py`), and stored
     nowhere.** A proposal whose round an operator later fixes by hand -- on
     the ordinary concert edit page, not through this feature at all -- simply
-    stops matching `anchors_differ` the next time the review queue or the
-    per-concert draft page renders, and both `pending_proposal_groups` and
-    `_draft_row` (`web/routes/quiet_ladders.py`) drop it with no second write
+    stops matching `anchors_differ` the next time a reader classifies it, and
+    `_draft_row` (`web/routes/quiet_ladders.py`) drops it with no second write
     anywhere to keep in step. Storing a `changed`/`resolved` flag on the row
     instead would need a second writer to clear it the moment a human's own
     edit made it stale, and a flag with no writer for one of its own
     transitions is exactly the kind of drift this file keeps finding
     elsewhere.
+  - **`pending_proposal_groups` (`db/round_proposals.py`), the review QUEUE
+    the digest DM links to, did NOT run this filter for all of round 1 of
+    this feature's own docs review -- only `_draft_row`, the PER-CONCERT
+    page, did.** A proposal an operator resolved by hand kept listing on the
+    queue with a phantom pending count; drilling into the concert was the
+    only way to discover there was nothing left to do, which is exactly the
+    silent worklist-that-never-empties failure phase 1's own gaps entry
+    named for this same page. Fixed by reusing `classify_stored_proposal` --
+    never a second comparison -- inside `pending_proposal_groups` itself, so
+    a concert whose every pending proposal now resolves leaves the queue
+    entirely rather than showing an empty-looking group. That function loads
+    `Concert.rounds` with `selectinload`, one query for the whole batch:
+    the relationship carries no `lazy="raise"` guard the way `venue_tag`
+    does, so a bare `concert.rounds` read during async template rendering
+    would be a `MissingGreenlet` 500, not a clean failure, and a per-concert
+    load inside the grouping loop would turn one review-queue render into
+    N+1 queries.
   - **`anchors_differ` (`domain/round_proposals.py`) is the field list TWO
     different comparisons share, on purpose, and the sharing is the fix for a
     real incident, not a style preference.** `_differs` diffs a poll's

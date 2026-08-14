@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.config import settings
+from app.db.models import Round
 from app.db.service import ensure_user, upsert_proposal
 from app.db.session import get_session
 from app.domain.types import RoundKind
@@ -61,6 +62,21 @@ async def _concert(session, event_id, title):
     session.add(concert)
     await session.flush()
     return concert
+
+
+async def _held_round(session, concert, *, label, opens_at_utc, **kw):
+    round_ = Round(
+        concert_id=concert.id,
+        kind=kw.pop("kind", RoundKind.LOTTERY_ROUND),
+        label=label,
+        opens_at_utc=opens_at_utc,
+        closes_at_utc=kw.pop("closes_at_utc", None),
+        results_at_utc=kw.pop("results_at_utc", None),
+        payment_deadline_at_utc=kw.pop("payment_deadline_at_utc", None),
+    )
+    session.add(round_)
+    await session.flush()
+    return round_
 
 
 NOW = datetime(2026, 8, 13, tzinfo=UTC)
@@ -178,6 +194,46 @@ async def test_a_dismissed_proposal_is_not_listed(client):
     assert "<td>1次先行</td>" in r.text
     assert "<td>2次先行</td>" not in r.text
     assert "Live B" not in r.text  # the dismissed proposal's concert has nothing else pending
+
+
+async def test_a_resolved_proposal_leaves_the_queue_and_its_concert(client):
+    """Round 1 of this feature's own docs review found this page missing the
+    filter `_draft_row` (the per-concert page) already had: a proposal whose
+    round an operator already fixed by hand on the ordinary concert editor
+    kept showing HERE -- on the page the digest DM actually links to -- with
+    a stale pending count, even though the per-concert page correctly showed
+    "nothing waiting". `pending_proposal_groups` now runs the exact same
+    `classify_stored_proposal` check `_draft_row` does.
+
+    Mutation: dropping the `"resolved"` check (or its eager-loaded held
+    rounds) from `pending_proposal_groups` leaves Live A's now-redundant
+    proposal, and Live A itself, on the page. A second, genuinely pending
+    proposal is seeded on a DIFFERENT concert so the opposite mutation --
+    over-filtering, e.g. treating every proposal as resolved -- fails this
+    test too, not just the one that filters too little.
+    """
+    OPENS = datetime(2026, 9, 1, 1, 0, tzinfo=UTC)  # JST 10:00
+    CLOSES = datetime(2026, 9, 8, 15, 0, tzinfo=UTC)  # JST 2026-09-09 00:00
+    async with client.db() as s:
+        await ensure_user(s, ADMIN_ID, "reiji")
+        resolved_concert = await _concert(s, "live-a", "Live A")
+        await _held_round(
+            s, resolved_concert, label="1次先行", opens_at_utc=OPENS, closes_at_utc=CLOSES,
+        )
+        await _propose(
+            s, resolved_concert, label="1次先行", opens_at_utc=OPENS, closes_at_utc=CLOSES,
+        )
+        pending_concert = await _concert(s, "live-b", "Live B")
+        await _propose(s, pending_concert, label="2次先行")
+        await s.commit()
+
+    login_as(client, ADMIN_ID, "reiji")
+    r = client.get("/admin/quiet-ladders/proposals")
+    assert r.status_code == 200
+    assert "Live A" not in r.text, "a resolved proposal's concert must leave the queue entirely"
+    assert "<td>1次先行</td>" not in r.text
+    assert "Live B" in r.text
+    assert "<td>2次先行</td>" in r.text
 
 
 # ── The digest DM is the only door in ────────────────────────────────────
