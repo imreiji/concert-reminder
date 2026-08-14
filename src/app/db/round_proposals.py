@@ -26,6 +26,7 @@ the page are already correct on the day a button appears -- a filter added
 after the fact is a filter every existing reader is missing.
 """
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from sqlalchemy import select
@@ -110,6 +111,63 @@ async def pending_proposals(session: AsyncSession) -> list[RoundProposal]:
         )
         .order_by(RoundProposal.first_seen_at, RoundProposal.id)
     )).scalars().all())
+
+
+@dataclass(frozen=True)
+class ProposalGroup:
+    """`pending_proposals` grouped by the concert it names, for the review
+    page (GET /admin/quiet-ladders/proposals). Group order follows each
+    concert's earliest pending proposal -- the same oldest-first worklist
+    reading `pending_proposals` already returns, just folded by concert
+    instead of left flat."""
+
+    concert_id: int
+    event_id: str
+    title: str
+    proposals: list[RoundProposal]
+
+
+async def pending_proposal_groups(session: AsyncSession) -> list[ProposalGroup]:
+    """`pending_proposals`, grouped by concert.
+
+    A second query rather than a join: `pending_proposals` is the worklist
+    ordering every other reader shares, and re-deriving "pending" here with a
+    join would be a second definition of it free to drift from the first.
+    A proposal whose concert is missing from the batch load (a delete racing
+    this read -- CASCADE removes the proposal with it) is skipped rather than
+    raised, the same warns-and-skips habit every reader in this package
+    follows for a third party's page; the review page just shows one fewer
+    row rather than 500ing.
+    """
+    proposals = await pending_proposals(session)
+    if not proposals:
+        return []
+    concerts = {
+        c.id: c
+        for c in (
+            await session.execute(
+                select(Concert).where(Concert.id.in_({p.concert_id for p in proposals}))
+            )
+        ).scalars().all()
+    }
+    groups: dict[int, ProposalGroup] = {}
+    order: list[int] = []
+    for proposal in proposals:
+        concert = concerts.get(proposal.concert_id)
+        if concert is None:
+            continue
+        group = groups.get(proposal.concert_id)
+        if group is None:
+            group = ProposalGroup(
+                concert_id=concert.id,
+                event_id=concert.event_id,
+                title=concert.title,
+                proposals=[],
+            )
+            groups[proposal.concert_id] = group
+            order.append(proposal.concert_id)
+        group.proposals.append(proposal)
+    return [groups[cid] for cid in order]
 
 
 async def dismissed_keys_for(session: AsyncSession, concert_id: int) -> set[str]:
