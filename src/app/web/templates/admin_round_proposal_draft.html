@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+{#- Admin-only operational page: English-only and deliberately NOT wrapped in
+    _(), following admin_round_proposals.html/admin_quiet_ladders.html (see
+    quiet_ladders.py's module docstring).
+
+    One concert's pending round proposals, each rendered as a real form
+    pre-filled with the model's own values, its quoted source line beside
+    every field that has one -- Task 4 of the round-poll phase-2 plan
+    (docs/superpowers/sdd/2026-08-14-round-poll-phase-2). Read-only: no POST
+    route exists yet, so every button below is `disabled` rather than dead --
+    Task 5 wires Approve and Dismiss.
+
+    NEW vs CHANGED (`row.status`) is computed at REQUEST TIME by
+    `classify_stored_proposal` against the concert's CURRENT rounds, never
+    stored on the proposal row -- see quiet_ladders.py's `_draft_row`. A
+    CHANGED row gets no Approve control at all: Phase 2's write path is
+    creates-only (owner ruling, 2026-08-14), so there is nothing this page
+    could apply for a round the concert already holds -- its only actions are
+    Dismiss and the link into the concert editor above the list.
+
+    Styled to match `_editor_round_card.html`'s `.redit`/`.cardtop`/
+    `.redit-times` shapes rather than importing its `round_card` macro
+    outright: that macro also carries EN/ZH label variants, the upgrade-
+    qualifier chip row, the "requires item" select and the phrase-memory
+    dialog, none of which a still-unapproved proposal has (`RoundProposal`
+    has no `label_en`/`label_zh` columns at all) or needs before it becomes a
+    real `Round`. -#}
+{% block title %}Round proposals — {{ concert.title }} — dekimasen.app{% endblock %}
+{% block content %}
+<h1>{{ concert.title }}</h1>
+<p class="dim">
+  <a href="/concerts/{{ concert.event_id }}/edit">Edit this concert</a>
+  ·
+  <a href="/admin/quiet-ladders/proposals">All proposals</a>
+</p>
+
+{% if not rows %}
+<div class="edgecard ok">
+  Nothing is waiting on a review for this concert right now.
+</div>
+{% else %}
+{% for row in rows %}
+<div class="redit" id="proposal-{{ row.proposal.id }}">
+  <div class="cardtop">
+    <span class="cardname">{{ row.proposal.label }}</span>
+    <span class="dim tiny">{{ row.proposal.kind.value.replace("_", " ") }}</span>
+    {% if row.status == "new" %}
+    <span class="chip on">New</span>
+    {% else %}
+    <span class="chip on">Changed</span>
+    {% endif %}
+  </div>
+
+  {#- Which legs this proposal names. `d.id in row.ticked_legs` decides the
+      tick, matching `_leg_selection`'s all-means-empty / no-match-means-all
+      fallback -- so an operator always sees SOME set of boxes ticked, never
+      a blank row that reads as "applies to nothing". Unmatched labels (a leg
+      the model named that no longer exists, or never did) render as their
+      own line rather than being dropped, in EITHER branch above. -#}
+  <div class="leg-chips">
+    <span class="eyebrow">Applies to</span>
+    {% for d in legs %}
+    {% if row.status == "new" %}
+    <label class="chip check{% if d.id in row.ticked_legs %} on{% endif %}">
+      <input type="checkbox" name="applies_to_days" value="{{ d.id }}"
+             form="proposal-form-{{ row.proposal.id }}"
+             {% if d.id in row.ticked_legs %}checked{% endif %}>
+      {{ d.label }}
+    </label>
+    {% else %}
+    <span class="chip{% if d.id in row.ticked_legs %} on{% endif %}">{{ d.label }}</span>
+    {% endif %}
+    {% else %}
+    <span class="dim tiny">This concert has no legs yet.</span>
+    {% endfor %}
+  </div>
+  {% if row.unmatched_legs %}
+  <p class="dim tiny">
+    The model also named
+    {% for label in row.unmatched_legs %}“{{ label }}”{% if not loop.last %}, {% endif %}{% endfor %}
+    — no leg on this concert matches{% if row.unmatched_legs | length == 1 %} it{% endif %}.
+  </p>
+  {% endif %}
+
+  {% if row.status == "new" %}
+  {#- A REAL form: every value below is what Task 5's Approve would submit,
+      pre-filled from the proposal exactly as `concert_edit.html`'s round_card
+      pre-fills a saved round's own datetime-local inputs
+      (`jst(dt).strftime('%Y-%m-%dT%H:%M')`). The leg checkboxes above target
+      this form via the `form=` attribute rather than nesting inside it,
+      since they render before it in the DOM. No `action`/`method` yet --
+      there is nothing to submit to. -#}
+  <form id="proposal-form-{{ row.proposal.id }}" data-proposal-form>
+    <input type="hidden" name="proposal_id" value="{{ row.proposal.id }}">
+    <div class="redit-times">
+      {% for field in time_fields %}
+      {% set dt = row.proposal[field.attr] %}
+      <label>{{ field.label }} (JST)
+        <input type="datetime-local" name="{{ field.name }}"
+               value="{{ jst(dt).strftime('%Y-%m-%dT%H:%M') if dt else '' }}">
+      </label>
+      {% if row.evidence.get(field.label) %}
+      <p class="dim tiny">Read from the page: “{{ row.evidence[field.label] }}”</p>
+      {% else %}
+      <p class="dim tiny">not stated</p>
+      {% endif %}
+      {% endfor %}
+    </div>
+    <div class="redit-extra">
+      {% if row.source_url %}
+      <a href="{{ row.source_url }}" target="_blank" rel="noopener">source</a>
+      {% endif %}
+    </div>
+  </form>
+  <div class="editor-actions">
+    <button type="button" class="act" disabled>Approve</button>
+    <button type="button" class="act danger" disabled>Dismiss</button>
+  </div>
+  {% else %}
+  {#- CHANGED: stored beside proposed, and no Approve anywhere in this
+      branch -- Phase 2 never writes an update, only a create. -#}
+  <table class="tagtable">
+    <thead><tr><th></th><th>Stored</th><th>Proposed</th></tr></thead>
+    <tbody>
+      {% for field in time_fields %}
+      <tr>
+        <td>{{ field.label }}</td>
+        <td>
+          {% set stored_dt = row.held[field.attr] if row.held else none %}
+          {% if stored_dt %}
+            {% set sl = dual_lines(stored_dt, tz) %}
+            <b>{{ sl[0] }}</b><br>{{ sl[1] }}
+          {% else %}<span class="dim">not stated</span>{% endif %}
+        </td>
+        <td>
+          {% set proposed_dt = row.proposal[field.attr] %}
+          {% if proposed_dt %}
+            {% set pl = dual_lines(proposed_dt, tz) %}
+            <b>{{ pl[0] }}</b><br>{{ pl[1] }}
+          {% else %}<span class="dim">not stated</span>{% endif %}
+          {% if row.evidence.get(field.label) %}
+          <p class="dim tiny">“{{ row.evidence[field.label] }}”</p>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="editor-actions">
+    {% if row.source_url %}
+    <a href="{{ row.source_url }}" target="_blank" rel="noopener">source</a>
+    {% endif %}
+    <button type="button" class="act danger" disabled>Dismiss</button>
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

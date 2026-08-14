@@ -26,6 +26,7 @@ the page are already correct on the day a button appears -- a filter added
 after the fact is a filter every existing reader is missing.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -34,7 +35,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.db.core import ensure_user
-from app.db.models import Concert, Notification, RoundPollState, RoundProposal, User
+from app.db.models import Concert, Notification, Round, RoundPollState, RoundProposal, User
 from app.domain.round_proposals import dedupe_key
 from app.domain.types import RoundKind
 
@@ -146,6 +147,82 @@ async def pending_proposals(session: AsyncSession) -> list[RoundProposal]:
         )
         .order_by(RoundProposal.first_seen_at, RoundProposal.id)
     )).scalars().all())
+
+
+async def pending_proposals_for(session: AsyncSession, concert_id: int) -> list[RoundProposal]:
+    """`pending_proposals`, narrowed to ONE concert -- what the draft page
+    (`GET /admin/quiet-ladders/proposals/{event_id}`) reads. Same
+    both-timestamps-NULL definition of pending and the same oldest-first
+    order, for the same reason `pending_proposals` gives: the longest-waiting
+    proposal on THIS concert is still the one worth reviewing first.
+    """
+    return list((await session.execute(
+        select(RoundProposal)
+        .where(
+            RoundProposal.concert_id == concert_id,
+            RoundProposal.dismissed_at.is_(None),
+            RoundProposal.applied_at.is_(None),
+        )
+        .order_by(RoundProposal.first_seen_at, RoundProposal.id)
+    )).scalars().all())
+
+
+def held_rounds_by_key(rounds: Sequence[Round]) -> dict[str, Round]:
+    """A concert's OWN rounds, keyed the same way a proposal already is.
+
+    `Round` already carries every attribute `domain.round_proposals.HeldRound`
+    copies (`label`, `opens_at_utc`, `closes_at_utc`, `results_at_utc`,
+    `payment_deadline_at_utc`) -- keyed straight off the ORM row through
+    `dedupe_key` rather than through a `HeldRound` wrapper, which would only be
+    a second object naming the same five attributes for no reader here.
+    """
+    return {dedupe_key(r.label, r.opens_at_utc): r for r in rounds}
+
+
+def classify_stored_proposal(proposal: RoundProposal, held_by_key: dict[str, Round]) -> str:
+    """"new", "changed" or "resolved" for one PENDING `RoundProposal` against
+    the concert's CURRENT rounds.
+
+    Derived HERE, on every render, and never stored on the row: a proposal
+    whose round is later fixed by hand (an editor retypes the closing date the
+    proposal already named) simply stops being reported as changed the next
+    time this runs, with no second write anywhere to keep in step -- the same
+    "resolves itself" property the review page's docstring promises.
+
+    NOT a call to `domain.round_proposals.classify_proposals` -- a deliberate
+    SECOND comparison, not a second implementation of the first one, and the
+    reason is a type mismatch rather than a style choice. `classify_proposals`
+    diffs `ProposedRound`s, whose four anchors are JST TEXT living under
+    `ProposedRound.data`, read through `proposed_stamp_utc` at compare time. A
+    `RoundProposal` row already stores those same four anchors as typed, aware
+    UTC columns -- `upsert_proposal` ran the model's JST text through that
+    exact converter ONCE, at write time. Routing them back through JST text a
+    second time just to hand them to `_differs` would be a lossy round trip
+    (JST text truncates to the minute) bought for no benefit, since the
+    comparison below is otherwise identical.
+
+    MUST AGREE WITH `_differs` FIELD FOR FIELD, and does: the three non-key
+    anchors compared are `closes_at_utc`, `results_at_utc` and
+    `payment_deadline_at_utc`. `opens_at_utc` is excluded for the identical
+    reason `_differs` excludes it -- it is half of `dedupe_key`, the very key
+    `held_by_key` was already looked up by, so comparing it again could only
+    ever read False.
+
+    The key is `proposal.dedupe_key`, the column `upsert_proposal` wrote
+    through `domain.round_proposals.dedupe_key` at insert time -- read back
+    rather than recomputed, so this always matches on the exact key the writer
+    minted, never a second derivation of it.
+    """
+    held = held_by_key.get(proposal.dedupe_key)
+    if held is None:
+        return "new"
+    if (
+        proposal.closes_at_utc != held.closes_at_utc
+        or proposal.results_at_utc != held.results_at_utc
+        or proposal.payment_deadline_at_utc != held.payment_deadline_at_utc
+    ):
+        return "changed"
+    return "resolved"
 
 
 @dataclass(frozen=True)
