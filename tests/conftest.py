@@ -38,6 +38,7 @@ _SHIPPED_OFF_DEFAULTS = {
     "rehearsal_enabled": False,
     "discovery_enabled": False,
     "triage_enabled": False,
+    "round_poll_enabled": False,
     "deepseek_api_key": "",
 }
 

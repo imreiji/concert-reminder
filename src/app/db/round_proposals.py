@@ -31,7 +31,9 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import Concert, RoundPollState, RoundProposal
+from app.config import settings
+from app.db.core import ensure_user
+from app.db.models import Concert, Notification, RoundPollState, RoundProposal, User
 from app.domain.round_proposals import dedupe_key
 from app.domain.types import RoundKind
 
@@ -40,6 +42,10 @@ from app.domain.types import RoundKind
 # concert's official page plus an LLM call per page.
 ROUND_POLL_INTERVAL = timedelta(hours=24)
 ROUND_POLL_STATE_ID = 1
+# The digest's notice kind. A NAME, not a literal at the call site, because two
+# things must agree about it and neither raises when they don't: the queue below
+# and the assertion that it is absent from `UNREPORTED_NOTE_KINDS`.
+ROUND_POLL_NOTE_KIND = "round_poll"
 
 
 async def upsert_proposal(
@@ -149,6 +155,46 @@ async def stamp_round_poll_run(session: AsyncSession, now: datetime) -> None:
         session.add(state)
     state.last_run_at = now
     await session.flush()
+
+
+async def queue_round_poll_digest(session: AsyncSession, body: str) -> int:
+    """Queue the poll's digest DM to every admin. Returns admins queued.
+
+    Invariant 4: it goes through the notifications outbox and is never sent
+    from the pass or the scheduler block directly, which buys retry, ordering
+    and Forbidden handling for free. `concert_id` stays NULL, so
+    `scheduler.loop._notification_context` falls through to the plain-text path
+    and `record_deliveries` skips the concert-title lookup -- the send code
+    needs no change at all, exactly as `ops_alert` and `discovery` need none.
+
+    Deliberately NOT in `UNREPORTED_NOTE_KINDS`. That set is only for notices
+    that report ON deliveries and would otherwise report their own forever;
+    this one reports on a THIRD-PARTY PAGE and is an ordinary notice that
+    belongs in `delivery_log` like any other -- the `discovery` notice's
+    precedent exactly.
+
+    The transaction stays the caller's: this flushes, never commits.
+    """
+    if not body:
+        return 0
+
+    queued = 0
+    for admin_id in sorted(settings.admin_ids):
+        # An admin who has never signed into the web app has no `users` row,
+        # and `Notification.user_id` is an FK to it -- at flush time, far from
+        # the cause. Guarded on ABSENCE rather than calling `ensure_user`
+        # unconditionally: that refreshes the username, so an unconditional
+        # call would overwrite a real admin's name with this placeholder on
+        # every single run. Same guard, same reason, as `evaluate_and_alert`
+        # and `_record_and_announce`.
+        if await session.get(User, admin_id) is None:
+            await ensure_user(session, admin_id, str(admin_id))
+        session.add(
+            Notification(user_id=admin_id, body=body, kind=ROUND_POLL_NOTE_KIND)
+        )
+        queued += 1
+    await session.flush()
+    return queued
 
 
 async def record_ladder_polled(

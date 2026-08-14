@@ -290,9 +290,11 @@ from app.db.rehearsal import (
 )
 from app.db.round_proposals import (
     ROUND_POLL_INTERVAL,
+    ROUND_POLL_NOTE_KIND,
     ROUND_POLL_STATE_ID,
     dismissed_keys_for,
     pending_proposals,
+    queue_round_poll_digest,
     record_ladder_polled,
     round_poll_due,
     stamp_round_poll_run,
@@ -396,6 +398,7 @@ __all__ = [
     "REHEARSAL_EVENT_ID",
     "REHEARSAL_TAG_NAME",
     "ROUND_POLL_INTERVAL",
+    "ROUND_POLL_NOTE_KIND",
     "ROUND_POLL_STATE_ID",
     "Recipients",
     "RehearsalRow",
@@ -584,6 +587,7 @@ __all__ = [
     "pull_rehearsal_forward",
     "queue_broadcast",
     "queue_delivery_digest",
+    "queue_round_poll_digest",
     "quiet_entry_from_row",
     "quiet_ladder_rows",
     "recent_broadcasts",

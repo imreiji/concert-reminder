@@ -110,6 +110,7 @@ from app.db.service import (
     record_ladder_polled,
     upsert_proposal,
 )
+from app.domain.discovery_message import DM_CHAR_BUDGET
 from app.domain.page_text import html_to_text, normalize_page_text
 from app.domain.round_completion import (
     completion_prompt,
@@ -217,6 +218,137 @@ class PollReport:
     # warnings); `failures` is a concert the pass could not read at all.
     rejections: list[str] = field(default_factory=list)
     failures: list[str] = field(default_factory=list)
+
+
+# The most reasons one digest ever names, per list. A real cap rather than a
+# comment: `rejections` is one line per refused round across every concert
+# polled, so a bad model day is unbounded, and a DM past Discord's 2000-char
+# limit does not truncate -- discord.py raises and the WHOLE message is lost,
+# which is the one outcome a message about silent discards must not have.
+DIGEST_LIST_LIMIT = 10
+
+
+def _plural(n: int, word: str) -> str:
+    return f"{n} {word}" if n == 1 else f"{n} {word}s"
+
+
+def _reason_block(heading: str, reasons: list[str], kept: int) -> list[str]:
+    """One headed list, with an honest "+N more" when it was trimmed."""
+    if not reasons:
+        return []
+    shown = reasons[:kept]
+    lines = [f"**{heading}**", *(f"• {reason}" for reason in shown)]
+    dropped = len(reasons) - len(shown)
+    if dropped > 0:
+        lines.append(f"…and {_plural(dropped, 'more')}.")
+    return ["", *lines]
+
+
+def build_poll_digest(report: PollReport, *, base_url: str) -> str:
+    """The digest DM for one run. Pure: no DB, no Discord, no clock.
+
+    EVERY completed run gets one, including a run that found nothing, and that
+    is a deliberate departure from `build_discovery_dm`/`build_quiet_ladder_dm`,
+    which both return "" on an empty result. Those two are WORKLISTS -- an empty
+    worklist is nothing to do, and a daily "nothing found" trains the reader to
+    ignore the channel. This is a RUN REPORT for a subsystem that spends a paid
+    key against third-party pages once a day and stores nothing else about the
+    run (`RoundPollState` carries `last_run_at` and nothing more, deliberately).
+    Its ABSENCE is the signal: no digest means the pass did not complete, and
+    with a suppressed quiet day a broken pass and a quiet one would look
+    identical -- the exact silence this whole feature is built to remove.
+
+    Two distinctions the wording keeps apart, because each was built on purpose:
+
+    * NEW vs SEEN AGAIN. The pass re-reads the same page daily, so a proposal
+      nobody has reviewed is re-proposed every day until they act. Folded
+      together, this DM would say "1 new proposal" every morning, which teaches
+      its reader to skim past the rejection list underneath it.
+    * WAITING ON YOU vs ALREADY REFUSED. `skipped_host` is a click at
+      /admin/fetch-domains; `skipped_declined` is a human's answered no.
+      Reporting a declined host as "waiting for approval" sends the reader to a
+      screen with nothing on it to press.
+    """
+    head = (
+        f"**Round poll** — {_plural(report.concerts_seen, 'quiet concert')}, "
+        f"{report.polled} polled."
+    )
+    lines = [head, ""]
+
+    if report.new_proposals:
+        lines.append(
+            f"**{_plural(report.new_proposals, 'new proposal')}** — "
+            f"{base_url}/admin/quiet-ladders/proposals"
+        )
+    else:
+        lines.append("No new proposals.")
+    if report.refreshed:
+        lines.append(
+            f"{_plural(report.refreshed, 'proposal')} seen again, still waiting "
+            "on a review — not new."
+        )
+    if report.skipped_held:
+        lines.append(f"{_plural(report.skipped_held, 'round')} the concert already holds.")
+    if report.skipped_dismissed:
+        lines.append(
+            f"{_plural(report.skipped_dismissed, 'round')} re-offered after you "
+            "dismissed it."
+        )
+
+    # The counts the reader can act on, each naming WHERE. A declined host is
+    # listed too, without a link: it is not actionable, and saying so is what
+    # stops it being read as a pending approval.
+    if report.skipped_no_url:
+        lines.append(
+            f"{_plural(report.skipped_no_url, 'concert')} with no official page to read."
+        )
+    if report.skipped_host:
+        lines.append(
+            f"{_plural(report.skipped_host, 'concert')} waiting on your host "
+            f"approval — {base_url}/admin/fetch-domains"
+        )
+    if report.skipped_declined:
+        lines.append(
+            f"{_plural(report.skipped_declined, 'concert')} on a host you already "
+            "declined; nothing to do."
+        )
+    if report.budget_exhausted:
+        lines.append("Stopped at its time budget; the rest are tomorrow's.")
+
+    # The reason lists LAST and never dropped whole: a real deadline discarded
+    # without a reason is the failure this pass exists to prevent, and a count
+    # with no reason beside it is the same silence one step quieter.
+    kept_rejections = kept_failures = DIGEST_LIST_LIMIT
+    while True:
+        body = "\n".join([
+            *lines,
+            # The heading names the evidence rule's count, but the list is
+            # every reason -- `rejections` also carries the parser's per-round
+            # warnings and a kind this app does not have, which are discards
+            # (or a silently downgraded kind) by another route and just as
+            # worth reading.
+            *_reason_block(
+                f"Discarded rounds — {report.rounds_rejected} refused by the "
+                "evidence rule",
+                report.rejections,
+                kept_rejections,
+            ),
+            *_reason_block(
+                f"{_plural(report.failed, 'concert')} could not be read",
+                report.failures,
+                kept_failures,
+            ),
+            "",
+            f"{report.tokens_in} tokens in, {report.tokens_out} out.",
+        ])
+        if len(body) <= DM_CHAR_BUDGET or (kept_rejections <= 1 and kept_failures <= 1):
+            return body
+        # Trim the longer list first, so one runaway list cannot silence the
+        # other one entirely.
+        if kept_rejections >= kept_failures:
+            kept_rejections -= 1
+        else:
+            kept_failures -= 1
 
 
 def _user_agent_for(url: str) -> str:
