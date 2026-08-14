@@ -68,3 +68,39 @@ def test_a_genuinely_new_round_survives(make_proposed):
     held = [HeldRound("1次先行", datetime(2026, 9, 3, 1, 0, tzinfo=UTC))]
     fresh = make_proposed("2次先行", datetime(2026, 9, 20, 1, 0, tzinfo=UTC))
     assert new_proposals(held, [fresh]) == [fresh]
+
+
+def test_a_held_round_with_seconds_still_dedupes_against_a_proposed_one_without(
+    make_proposed,
+):
+    """CRITICAL (review round 1): `HeldRound.opens_at_utc` can carry seconds --
+    it comes off a bare `Round.opens_at_utc` column, and `yaml_import._dt`
+    accepts a YAML timestamp WITH seconds verbatim, so a hand- or AI-authored
+    draft can seed a live round with one. `_proposed_opens_at_utc` always
+    yields ':00' seconds/microseconds, since it parses "%Y-%m-%d %H:%M" text.
+    Mutation: dropping `dedupe_key`'s `.replace(second=0, microsecond=0)`
+    truncation. Then the same real-world round produces two different keys
+    depending on which side of the diff it's read from, and is re-proposed
+    every poll, forever -- proven empirically: held ':00:30' vs proposed
+    ':00:00' produced different keys before this fix."""
+    held = [HeldRound("1次先行", datetime(2026, 9, 3, 1, 0, 30, tzinfo=UTC))]
+    proposed = [make_proposed("1次先行", datetime(2026, 9, 3, 1, 0, 0, tzinfo=UTC))]
+    assert new_proposals(held, proposed) == []
+
+
+def test_new_proposals_itself_treats_a_moved_open_time_as_a_different_round(
+    make_proposed,
+):
+    """IMPORTANT (review round 1): the moved-date rule was previously pinned
+    only through `dedupe_key` called directly
+    (`test_a_moved_open_time_is_a_DIFFERENT_key`) -- `new_proposals`, the
+    function that actually filters, was never exercised with the same label
+    at a different date. A mutation matching on `_normalize_label(label)`
+    alone (ignoring `opens_at_utc` entirely) passed all five original tests.
+    Mutation: `new_proposals` filtering on label alone, which would let a
+    corrected or moved deadline be silently swallowed by an earlier
+    dismissal forever -- precisely the behaviour the key shape exists to
+    prevent."""
+    held = [HeldRound("1次先行", datetime(2026, 9, 3, 1, 0, tzinfo=UTC))]
+    proposed = [make_proposed("1次先行", datetime(2026, 9, 20, 1, 0, tzinfo=UTC))]
+    assert new_proposals(held, proposed) == proposed

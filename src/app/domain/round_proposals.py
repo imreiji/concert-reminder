@@ -14,12 +14,20 @@ one, lives as JST TEXT under `data["apply_opens_jst"]` (one of
 draft vocabulary's `"%Y-%m-%d %H:%M"` shape -- never a `datetime`, so PyYAML
 resolving a mapping value and the draft parser reading it back stay in
 agreement. `_proposed_opens_at_utc` below does the JST-text -> aware-UTC
-conversion `HeldRound.opens_at_utc` already carries (it comes straight off a
-`ConcertDay`/`RoundRule` column, via `db.quiet_ladders.QuietRound`), so the two
-sides of the diff are comparable at all. A value that is absent, blank or
-does not parse in that exact shape is treated as "no open time known" rather
-than raised -- the same warns-and-skips habit every parser in this package
-follows, and the only sane response to text a model wrote freehand.
+conversion so this side of the diff has SOMETHING to compare against
+`HeldRound.opens_at_utc`. A value that is absent, blank or does not parse in
+that exact shape is treated as "no open time known" rather than raised --
+the same warns-and-skips habit every parser in this package follows, and
+the only sane response to text a model wrote freehand.
+
+THE TWO SIDES ARE NOT COMPARABLE ON PRECISION WITHOUT HELP. Parsing
+"%Y-%m-%d %H:%M" always yields ":00" seconds/microseconds, but
+`HeldRound.opens_at_utc` comes off a bare `Round.opens_at_utc` column with no
+precision constraint -- `domain/yaml_import.py`'s `_dt` accepts a YAML
+timestamp WITH seconds verbatim, so a hand- or AI-authored draft can seed a
+live round with one. `dedupe_key` truncates both sides to minute precision
+for exactly this reason; read its docstring before touching either side of
+this comparison.
 """
 
 from __future__ import annotations
@@ -58,7 +66,22 @@ def dedupe_key(label: str, opens_at_utc: datetime | None) -> str:
 
     Derived and readable rather than an opaque hash: a key you can read in the
     table is a key you can debug.
+
+    Truncated to MINUTE precision on whatever it is given. The two sides of
+    the diff are not guaranteed to agree below that: `_proposed_opens_at_utc`
+    always yields ":00" seconds/microseconds because it parses
+    "%Y-%m-%d %H:%M" text, but `HeldRound.opens_at_utc` comes off a bare
+    `Round.opens_at_utc` column with no such constraint --
+    `domain/yaml_import.py`'s `_dt` accepts a YAML timestamp WITH seconds
+    verbatim, so a hand- or AI-authored draft can put one on a live round.
+    Without this truncation the same real-world round produces two different
+    keys depending on which side of the diff it's read from, and is
+    re-proposed every poll, forever -- the exact failure this key exists to
+    prevent. The truncation lives HERE, not at call sites, so `dedupe_key` is
+    safe to call directly and the fix cannot be forgotten at a second site.
     """
+    if opens_at_utc is not None:
+        opens_at_utc = opens_at_utc.replace(second=0, microsecond=0)
     stamp = opens_at_utc.isoformat() if opens_at_utc is not None else ""
     return f"{_normalize_label(label)}|{stamp}"
 
