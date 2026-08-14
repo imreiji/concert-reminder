@@ -110,7 +110,14 @@ from app.db.service import (
     record_ladder_polled,
     upsert_proposal,
 )
-from app.domain.discovery_message import DM_CHAR_BUDGET
+
+# `_clip` is private and imported anyway, the way this module already imports
+# `yaml_import._round_kind` and `fetching._normalize_host`: it is THE rule for
+# capping an unbounded free-text field before it reaches a DM, and its own
+# docstring records the exact failure -- one long field blowing the budget
+# before the block-truncation loop can run. A second copy here would be a
+# second rule to keep in step with the one budget both obey.
+from app.domain.discovery_message import DM_CHAR_BUDGET, _clip
 from app.domain.page_text import html_to_text, normalize_page_text
 from app.domain.round_completion import (
     completion_prompt,
@@ -226,6 +233,17 @@ class PollReport:
 # limit does not truncate -- discord.py raises and the WHOLE message is lost,
 # which is the one outcome a message about silent discards must not have.
 DIGEST_LIST_LIMIT = 10
+# And the cap on ONE of them. Capping only the LIST is not enough, and the gap
+# is not theoretical: a reason embeds model-supplied text verbatim
+# (`round_evidence.py` mints `f"round {label!r}: {reason}"`), so a single
+# 2,500-character label the model invented produces a 2,698-character digest
+# that the shrink loop below cannot help with -- it has nothing left to drop
+# once each list is down to its last entry. Past 2,000 chars discord.py raises
+# HTTPException, `_send_notification` returns TRANSIENT_FAILURE, the row is
+# never marked sent, and the tick retries it every 60 seconds forever while the
+# digest is never delivered. `build_discovery_dm`, the precedent this module
+# follows, caps every free-text field it embeds for exactly this reason.
+MAX_REASON_CHARS = 200
 
 
 def _plural(n: int, word: str) -> str:
@@ -233,11 +251,19 @@ def _plural(n: int, word: str) -> str:
 
 
 def _reason_block(heading: str, reasons: list[str], kept: int) -> list[str]:
-    """One headed list, with an honest "+N more" when it was trimmed."""
+    """One headed list, with an honest "+N more" when it was trimmed.
+
+    Each line is clipped to `MAX_REASON_CHARS` -- the reason stays
+    recognisable, which is the whole point of printing it, but a model-supplied
+    label cannot decide how long this DM is.
+    """
     if not reasons:
         return []
     shown = reasons[:kept]
-    lines = [f"**{heading}**", *(f"• {reason}" for reason in shown)]
+    lines = [
+        f"**{heading}**",
+        *(f"• {_clip(reason, MAX_REASON_CHARS)}" for reason in shown),
+    ]
     dropped = len(reasons) - len(shown)
     if dropped > 0:
         lines.append(f"…and {_plural(dropped, 'more')}.")

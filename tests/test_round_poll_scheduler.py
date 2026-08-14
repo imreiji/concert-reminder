@@ -15,12 +15,21 @@ from sqlalchemy import select
 
 import app.scheduler.loop as loop_mod
 from app.config import Settings, settings
-from app.db.models import Notification, RoundPollState, User
+from app.db.models import Concert, Notification, RoundPollState, User
 from app.db.service import ROUND_POLL_NOTE_KIND, UNREPORTED_NOTE_KINDS
 from app.round_poll import PollReport, build_poll_digest
 
-ADMIN_ID = 1
+# TWO admins, never one. With a single id in the whitelist, slicing the
+# recipient loop to `[:1]` survives every test in this file -- and a two-admin
+# deployment would then silently stop digesting to the second one.
+ADMIN_IDS = (1, 2)
+# The one with a real `users` row already, so both branches of the
+# `ensure_user` guard are exercised by a single tick.
+KNOWN_ADMIN_ID = 1
 BASE_URL = "https://dekimasen.app"
+# Neither admin: `Concert.created_by` is an FK, and using an admin id would
+# create the very users row the guard tests are about.
+AUTHOR_ID = 99
 
 
 class FakeUser:
@@ -48,7 +57,9 @@ async def maker(db, monkeypatch):
     monkeypatch.setattr(loop_mod, "SessionMaker", db)
     # Tick 1 of 5: keep the health/prune cadence out of these assertions.
     monkeypatch.setattr(loop_mod, "_tick_count", 0)
-    monkeypatch.setattr(settings, "admin_whitelist", str(ADMIN_ID))
+    monkeypatch.setattr(
+        settings, "admin_whitelist", ",".join(str(i) for i in ADMIN_IDS)
+    )
     monkeypatch.setattr(settings, "base_url", BASE_URL)
     return db
 
@@ -212,10 +223,9 @@ async def test_the_digest_is_queued_not_sent(maker, monkeypatch):
     await loop_mod.tick(bot)
 
     rows = await _digests(maker)
-    assert len(rows) == 1
-    assert rows[0].user_id == ADMIN_ID
-    assert rows[0].sent_at_utc is None, "queued for the drain, not already sent"
-    assert rows[0].concert_id is None, "NULL is what selects the plain-text path"
+    assert {r.user_id for r in rows} == set(ADMIN_IDS), "every admin, not just one"
+    assert all(r.sent_at_utc is None for r in rows), "queued for the drain, not sent"
+    assert all(r.concert_id is None for r in rows), "NULL selects the plain-text path"
     assert bot.user_obj.sent == [], "nothing was DMed during the tick that queued it"
 
 
@@ -225,19 +235,36 @@ async def test_the_queued_digest_reaches_the_admin_as_plain_text(maker, monkeypa
     on the NEXT tick, and `concert_id = NULL` is what makes it plain text
     instead of a rich embed the notice has no context to build.
 
-    Mutation: queueing it with a concert_id -- the send path would then try to
-    build an embed for a notice that describes no single concert."""
+    Mutation: queueing it with a concert_id -- the send path then builds a rich
+    embed for a notice that describes no single concert, and the digest's text
+    never reaches anyone.
+
+    A `Concert` is seeded for NO other reason than to make that mutation
+    reachable. With an empty concerts table `_notification_context` can only
+    ever return None, so the plain-text path holds however the row was queued
+    and the mutation dies on a foreign key instead of on the embed path it
+    exists to expose. The seeded concert also makes this tick emit the
+    quiet-ladder notice, which is why the digest is picked out of the sends by
+    its own opening line rather than assumed to be the only one."""
     monkeypatch.setattr(settings, "round_poll_enabled", True)
     _recorder(monkeypatch, PollReport(concerts_seen=1, polled=1))
+    async with maker() as s:
+        s.add(User(discord_id=AUTHOR_ID, username="author"))
+        await s.flush()
+        s.add(Concert(id=1, event_id="live-1", title="Live", created_by=AUTHOR_ID))
+        await s.commit()
 
     bot = FakeBot()
     await loop_mod.tick(bot)
     await loop_mod.tick(bot)
 
-    assert len(bot.user_obj.sent) == 1
-    args, kwargs = bot.user_obj.sent[0]
-    assert kwargs == {}, "the plain-text path passes no embed and no view"
-    assert "Round poll" in args[0]
+    plain = [
+        (args, kwargs)
+        for args, kwargs in bot.user_obj.sent
+        if args and isinstance(args[0], str) and args[0].startswith("**Round poll**")
+    ]
+    assert len(plain) == len(ADMIN_IDS), "one plain-text digest per admin"
+    assert all(kwargs == {} for _args, kwargs in plain), "no embed, no view"
 
 
 def test_the_digest_kind_is_not_in_UNREPORTED_NOTE_KINDS():
@@ -258,8 +285,9 @@ async def test_an_admin_who_never_signed_in_gets_a_users_row(maker, monkeypatch)
     await loop_mod.tick(FakeBot())
 
     async with maker() as s:
-        assert await s.get(User, ADMIN_ID) is not None
-    assert len(await _digests(maker)) == 1
+        for admin_id in ADMIN_IDS:
+            assert await s.get(User, admin_id) is not None
+    assert len(await _digests(maker)) == len(ADMIN_IDS)
 
 
 @pytest.mark.asyncio
@@ -267,17 +295,19 @@ async def test_a_real_admins_username_survives_the_digest(maker, monkeypatch):
     """Mutation: calling ensure_user unconditionally instead of only when
     session.get(User, admin_id) returns None. ensure_user REFRESHES the
     username, so the unconditional call overwrites a real admin's name with the
-    numeric placeholder on every single run."""
+    numeric placeholder on every single run. The other admin has no row at all,
+    so one tick exercises both branches of the guard."""
     monkeypatch.setattr(settings, "round_poll_enabled", True)
     _recorder(monkeypatch)
     async with maker() as s:
-        s.add(User(discord_id=ADMIN_ID, username="reiji"))
+        s.add(User(discord_id=KNOWN_ADMIN_ID, username="reiji"))
         await s.commit()
 
     await loop_mod.tick(FakeBot())
 
     async with maker() as s:
-        assert (await s.get(User, ADMIN_ID)).username == "reiji"
+        assert (await s.get(User, KNOWN_ADMIN_ID)).username == "reiji"
+    assert len(await _digests(maker)) == len(ADMIN_IDS)
 
 
 @pytest.mark.asyncio
@@ -294,7 +324,7 @@ async def test_a_run_that_found_nothing_still_reports(maker, monkeypatch):
     await loop_mod.tick(FakeBot())
 
     rows = await _digests(maker)
-    assert len(rows) == 1
+    assert len(rows) == len(ADMIN_IDS)
     assert "3 polled" in rows[0].body
 
 
@@ -372,6 +402,30 @@ def test_a_runaway_reason_list_still_fits_one_dm():
     assert "…and" in body, "and it says how many it could not name"
     assert "200 refused by the evidence rule" in body, "the real count survives the trim"
     assert "50 concerts could not be read" in body
+
+
+def test_one_enormous_reason_still_fits_one_dm():
+    """The OTHER half, and the one the list cap cannot reach. A reason embeds
+    model-supplied text verbatim (`round_evidence.py` mints
+    `f"round {label!r}: {reason}"`), so a single invented 2,500-character label
+    produces a digest well past 2,000 with nothing left for the shrink loop to
+    drop -- both lists are already down to their last entry. Past that limit
+    discord.py raises, `_send_notification` returns TRANSIENT_FAILURE, the row
+    is never marked sent, and the tick retries it every 60 seconds forever
+    while the digest is never delivered.
+
+    Mutation: dropping the per-reason clip. The second assertion is why this is
+    not a length test: clipping the reason away to nothing, or dropping the
+    line outright, would satisfy a length-only check while destroying the whole
+    point of the message."""
+    body = _digest(
+        concerts_seen=1,
+        polled=1,
+        rounds_rejected=1,
+        rejections=[f"live-2026: round {'超' * 2500!r}: quotes a line not on the page"],
+    )
+    assert len(body) <= 1900
+    assert "live-2026: round '超超超" in body, "the reason is still recognisable"
 
 
 def test_a_truncated_run_says_so():
