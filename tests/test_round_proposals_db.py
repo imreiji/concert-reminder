@@ -11,11 +11,14 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
 
-from app.db.models import Concert, RoundProposal
+from app.db.models import Concert, Round, RoundProposal
 from app.db.service import (
+    classify_stored_proposal,
     dismissed_keys_for,
     ensure_user,
+    held_rounds_by_key,
     pending_proposals,
+    pending_proposals_for,
     quiet_ladder_rows,
     record_ladder_polled,
     round_poll_due,
@@ -27,6 +30,12 @@ from app.domain.types import RoundKind
 
 NOW = datetime(2026, 8, 13, 3, 0, tzinfo=UTC)
 OPENS = datetime(2026, 9, 1, 3, 0, tzinfo=UTC)
+# The rest of one round's ladder. Four DISTINCT values, deliberately: three of
+# the assertions below are about which column a value landed in, and equal
+# stamps would let a writer put the payment deadline in the results column.
+CLOSES = datetime(2026, 9, 8, 14, 59, tzinfo=UTC)
+RESULTS = datetime(2026, 9, 15, 9, 0, tzinfo=UTC)
+PAYMENT = datetime(2026, 9, 22, 14, 59, tzinfo=UTC)
 SOURCE = "https://example.jp/live/tickets"
 
 
@@ -44,6 +53,10 @@ async def _propose(
     *,
     label: str = "1次先行",
     opens_at_utc: datetime | None = OPENS,
+    closes_at_utc: datetime | None = None,
+    results_at_utc: datetime | None = None,
+    payment_deadline_at_utc: datetime | None = None,
+    applies_to_labels: list[str] | None = None,
     evidence_yaml: str = "",
     now: datetime = NOW,
 ) -> RoundProposal:
@@ -53,7 +66,10 @@ async def _propose(
         label=label,
         kind=RoundKind.LOTTERY_ROUND,
         opens_at_utc=opens_at_utc,
-        closes_at_utc=None,
+        closes_at_utc=closes_at_utc,
+        results_at_utc=results_at_utc,
+        payment_deadline_at_utc=payment_deadline_at_utc,
+        applies_to_labels=[] if applies_to_labels is None else applies_to_labels,
         evidence_yaml=evidence_yaml,
         source_url=SOURCE,
         now=now,
@@ -62,6 +78,30 @@ async def _propose(
 
 async def _count(session) -> int:
     return (await session.execute(select(func.count()).select_from(RoundProposal))).scalar_one()
+
+
+async def _held_round(
+    session,
+    concert: Concert,
+    *,
+    label: str = "1次先行",
+    opens_at_utc: datetime | None = OPENS,
+    closes_at_utc: datetime | None = None,
+    results_at_utc: datetime | None = None,
+    payment_deadline_at_utc: datetime | None = None,
+) -> Round:
+    round_ = Round(
+        concert_id=concert.id,
+        kind=RoundKind.LOTTERY_ROUND,
+        label=label,
+        opens_at_utc=opens_at_utc,
+        closes_at_utc=closes_at_utc,
+        results_at_utc=results_at_utc,
+        payment_deadline_at_utc=payment_deadline_at_utc,
+    )
+    session.add(round_)
+    await session.flush()
+    return round_
 
 
 async def test_a_second_poll_of_the_same_round_updates_rather_than_duplicates(session):
@@ -96,6 +136,152 @@ async def test_a_second_poll_of_the_same_round_updates_rather_than_duplicates(se
     # ...except first_seen_at, which answers "since when has this been proposed"
     # and would be a lie if every re-poll refreshed it.
     assert again.first_seen_at == first_seen
+
+
+async def test_the_three_new_fields_round_trip(session):
+    """A proposal carries the WHOLE round, not the half phase 1 stored.
+
+    Mutation: dropping any ONE of the three from `upsert_proposal`'s write.
+    Hence three SEPARATE assertions on three separate values -- asserting only
+    `results_at_utc`, or asserting them as one tuple that happens to be all
+    that is checked, lets the other two be dropped and stay green.
+
+    Read back after `expire_all`, so this is what SQLite holds rather than what
+    the in-memory object was handed: a column the mapper never persists (or one
+    the migration never added) is otherwise invisible here.
+    """
+    concert = await _concert(session)
+
+    proposal = await _propose(
+        session,
+        concert,
+        closes_at_utc=CLOSES,
+        results_at_utc=RESULTS,
+        payment_deadline_at_utc=PAYMENT,
+        applies_to_labels=["Day 1", "Day 2"],
+    )
+    proposal_id = proposal.id
+    await session.flush()
+    session.expire_all()
+
+    stored = await session.get(RoundProposal, proposal_id)
+    assert stored.results_at_utc == RESULTS
+    assert stored.payment_deadline_at_utc == PAYMENT
+    assert stored.applies_to_labels == ["Day 1", "Day 2"]
+    # The two phase 1 already stored, so a widening that broke them is caught
+    # here rather than by the poll's own test.
+    assert stored.opens_at_utc == OPENS
+    assert stored.closes_at_utc == CLOSES
+
+
+async def test_a_refresh_overwrites_the_new_fields_too(session):
+    """Today's reading of the page wins on every field except `first_seen_at`.
+
+    Mutation: setting the three new fields only on the INSERT branch. Nothing
+    else notices -- the row exists, the counts are right, and the proposal
+    simply keeps the first reading forever. A page that corrects its 当落発表
+    date, or adds the second leg it turned out to cover, keeps the same
+    `dedupe_key` (only the OPEN time is part of it), so the corrected value has
+    no other way in.
+
+    Three separate assertions again, for the reason above: one of the three
+    left inside the insert branch would survive a tuple compare that only
+    happened to cover the other two.
+    """
+    concert = await _concert(session)
+    first = await _propose(
+        session,
+        concert,
+        results_at_utc=RESULTS,
+        payment_deadline_at_utc=PAYMENT,
+        applies_to_labels=["Day 1"],
+    )
+    first_id, first_seen = first.id, first.first_seen_at
+
+    corrected_results = RESULTS + timedelta(days=3)
+    corrected_payment = PAYMENT + timedelta(days=3)
+    again = await _propose(
+        session,
+        concert,
+        results_at_utc=corrected_results,
+        payment_deadline_at_utc=corrected_payment,
+        applies_to_labels=["Day 1", "Day 2"],
+        now=NOW + timedelta(days=1),
+    )
+
+    assert await _count(session) == 1
+    assert again.id == first_id
+    assert again.results_at_utc == corrected_results
+    assert again.payment_deadline_at_utc == corrected_payment
+    assert again.applies_to_labels == ["Day 1", "Day 2"]
+    # Still the one field a re-poll must never refresh.
+    assert again.first_seen_at == first_seen
+
+
+async def test_applies_to_labels_defaults_to_empty_not_null(session):
+    """No legs named means EVERY leg -- `Round.applies_to`'s own convention.
+
+    Mutation: making the column nullable with no default. Every reader
+    downstream would then have to branch on None as well as on `[]`, and the
+    one convention would have two spellings; the review page would tick every
+    box for one of them and nothing for the other.
+
+    Constructed WITHOUT the field rather than with an empty list, because that
+    is the case the default exists for -- every row written before the column
+    existed. Passing `[]` explicitly would pass with no default at all.
+    """
+    concert = await _concert(session)
+    bare = RoundProposal(
+        concert_id=concert.id,
+        dedupe_key=dedupe_key("先行", None),
+        label="先行",
+        kind=RoundKind.LOTTERY_ROUND,
+        first_seen_at=NOW,
+    )
+    session.add(bare)
+    await session.flush()
+    bare_id = bare.id
+    session.expire_all()
+
+    stored = await session.get(RoundProposal, bare_id)
+    assert stored.applies_to_labels == []
+    assert stored.applies_to_labels is not None
+
+
+async def test_the_writer_coerces_every_leg_label_to_a_stripped_string(session):
+    """`upsert_proposal` is the WRITER, and its `[str(leg).strip() for ...]` is
+    two guards on one line -- each needing its own leg to bite on.
+
+    The poll's `_applies_to_labels` coerces too, and that duplication is
+    deliberate (see this function's own comment): the writer's copy is the one
+    nothing can route around, and phase 2's apply path adds more callers. But
+    duplication with only ONE test is duplication nothing defends -- deleting
+    `.strip()` at EITHER site alone left the whole suite green, because
+    `test_leg_labels_are_stored_as_the_strings_verify_matched` in
+    `test_round_poll.py` runs through the poll and either copy alone satisfies
+    it. This calls the writer DIRECTLY, so only the writer's copy can pass it.
+
+    * `str()` -- `date(2026, 1, 5)`, which a model's unquoted `2026-01-05`
+      resolves to. `json.dumps` refuses it, so without the coercion the flush
+      raises `StatementError` and, in the poll, abandons the whole run.
+    * `.strip()` -- `"　夜　"` in IDEOGRAPHIC SPACE (U+3000), the character
+      CLAUDE.md records SQLite's own `trim()` not touching. Without it the
+      stored label is not the label `verify_rounds` matched, so the review page
+      looks the leg up, finds nothing, and a round naming a real leg renders as
+      naming an unmatched one -- silently. `str(date(...))` carries no
+      whitespace, so the date leg cannot exercise this even in principle.
+    """
+    from datetime import date
+
+    concert = await _concert(session)
+    proposal = await _propose(
+        session, concert, applies_to_labels=[date(2026, 1, 5), "　夜　"]
+    )
+    proposal_id = proposal.id
+    session.expire_all()
+
+    stored = await session.get(RoundProposal, proposal_id)
+    assert stored.applies_to_labels == ["2026-01-05", "夜"]
 
 
 async def test_a_dismissed_key_is_reported_so_the_next_poll_can_skip_it(session):
@@ -209,3 +395,122 @@ async def test_polling_does_not_touch_the_human_recheck_stamp(session):
     assert [r.event_id for r in await quiet_ladder_rows(session, NOW)] == [
         "checked-in-march", "checked-yesterday",
     ]
+
+
+# ── classify_stored_proposal: the draft page's NEW/CHANGED/resolved split ──
+#
+# Direct unit tests, not exercised only through the HTTP route
+# (test_admin_round_proposal_draft.py): the round-1 review found this
+# function, `held_rounds_by_key` and `pending_proposals_for` had ZERO direct
+# tests, which is exactly how a reviewer could delete two of three compared
+# fields from `classify_stored_proposal` and leave 37 tests green. Mirrors
+# test_round_proposals_domain.py's per-field CHANGED tests one for one --
+# same reasoning, same "every OTHER field seeded identical" shape, so a
+# mutation that drops one field's comparison can only be caught by the test
+# built for that field.
+
+
+async def test_classify_stored_proposal_is_new_with_no_held_round(session):
+    """Mutation: `held_by_key.get` returning something truthy unconditionally.
+    An empty dict is the ordinary case for a genuinely new round."""
+    concert = await _concert(session)
+    proposal = await _propose(session, concert, closes_at_utc=CLOSES)
+    assert classify_stored_proposal(proposal, {}) == "new"
+
+
+async def test_classify_stored_proposal_is_resolved_when_every_anchor_matches(session):
+    """The "resolves itself" case: an operator already applied this exact
+    change by hand. Mutation: returning "changed" here (see the CHANGED
+    tests below, which invert this) or "new" -- either misreports a proposal
+    with nothing left to review."""
+    concert = await _concert(session)
+    held = await _held_round(
+        session, concert, closes_at_utc=CLOSES, results_at_utc=RESULTS,
+        payment_deadline_at_utc=PAYMENT,
+    )
+    proposal = await _propose(
+        session, concert, closes_at_utc=CLOSES, results_at_utc=RESULTS,
+        payment_deadline_at_utc=PAYMENT,
+    )
+    held_by_key = held_rounds_by_key([held])
+    assert classify_stored_proposal(proposal, held_by_key) == "resolved"
+
+
+async def test_a_moved_closing_date_alone_is_CHANGED_on_the_stored_side(session):
+    """Mutation: comparing results/payment but not closes. Results and
+    payment are seeded IDENTICAL so this can only pass by comparing closes."""
+    concert = await _concert(session)
+    held = await _held_round(
+        session, concert, closes_at_utc=CLOSES, results_at_utc=RESULTS,
+        payment_deadline_at_utc=PAYMENT,
+    )
+    moved_closes = CLOSES + timedelta(days=3)
+    proposal = await _propose(
+        session, concert, closes_at_utc=moved_closes, results_at_utc=RESULTS,
+        payment_deadline_at_utc=PAYMENT,
+    )
+    held_by_key = held_rounds_by_key([held])
+    assert classify_stored_proposal(proposal, held_by_key) == "changed"
+
+
+async def test_a_moved_results_date_alone_is_CHANGED_on_the_stored_side(session):
+    """Mutation: comparing closes but not results. Closes (and payment) are
+    seeded IDENTICAL so this can only pass by comparing results -- the exact
+    field the round-1 reviewer found undefended."""
+    concert = await _concert(session)
+    held = await _held_round(
+        session, concert, closes_at_utc=CLOSES, results_at_utc=RESULTS,
+        payment_deadline_at_utc=PAYMENT,
+    )
+    moved_results = RESULTS + timedelta(days=3)
+    proposal = await _propose(
+        session, concert, closes_at_utc=CLOSES, results_at_utc=moved_results,
+        payment_deadline_at_utc=PAYMENT,
+    )
+    held_by_key = held_rounds_by_key([held])
+    assert classify_stored_proposal(proposal, held_by_key) == "changed"
+
+
+async def test_a_moved_payment_deadline_alone_is_CHANGED_on_the_stored_side(session):
+    """Mutation: comparing results but not payment. Same shape: every other
+    field (opens, closes, results) is seeded IDENTICAL -- the other field the
+    round-1 reviewer found undefended."""
+    concert = await _concert(session)
+    held = await _held_round(
+        session, concert, closes_at_utc=CLOSES, results_at_utc=RESULTS,
+        payment_deadline_at_utc=PAYMENT,
+    )
+    moved_payment = PAYMENT + timedelta(days=3)
+    proposal = await _propose(
+        session, concert, closes_at_utc=CLOSES, results_at_utc=RESULTS,
+        payment_deadline_at_utc=moved_payment,
+    )
+    held_by_key = held_rounds_by_key([held])
+    assert classify_stored_proposal(proposal, held_by_key) == "changed"
+
+
+async def test_held_rounds_by_key_keys_on_label_and_opens_not_row_order(session):
+    """Mutation: keying on the round's id or list position instead of
+    `dedupe_key(label, opens_at_utc)` -- `classify_stored_proposal` looks a
+    proposal up by that exact key, so a differently-keyed dict would answer
+    "new" for every round that actually IS held."""
+    concert = await _concert(session)
+    held = await _held_round(session, concert, label="1次先行", opens_at_utc=OPENS)
+    other = await _held_round(
+        session, concert, label="2次先行", opens_at_utc=OPENS + timedelta(days=7),
+    )
+    by_key = held_rounds_by_key([held, other])
+    assert by_key[dedupe_key("1次先行", OPENS)] is held
+    assert by_key[dedupe_key("2次先行", OPENS + timedelta(days=7))] is other
+
+
+async def test_pending_proposals_for_scopes_to_one_concert(session):
+    """Mutation: querying without the `concert_id` filter (falling back to
+    `pending_proposals`'s whole-table scan). Two concerts seeded so a missing
+    filter is visible rather than accidentally correct."""
+    concert_a = await _concert(session, "live-a")
+    concert_b = await _concert(session, "live-b")
+    on_a = await _propose(session, concert_a, label="1次先行")
+    await _propose(session, concert_b, label="他公演先行")
+
+    assert [p.id for p in await pending_proposals_for(session, concert_a.id)] == [on_a.id]

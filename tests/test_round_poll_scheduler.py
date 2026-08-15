@@ -349,6 +349,19 @@ def test_a_new_proposal_and_a_re_sighting_are_reported_apart():
     assert "4 new" not in body
 
 
+def test_the_digest_names_changes_apart_from_new_rounds():
+    """Only NEW rounds are approvable on the draft review page -- a CHANGED one
+    names a date that moved on a round the concert already holds, and Phase
+    2's write path is creates-only (owner ruling, 2026-08-14), so that row
+    renders with no Approve button. Mutation: one combined line -- the
+    operator then opens the page expecting a button that is deliberately
+    absent for half the rows it's counting."""
+    body = _digest(concerts_seen=3, polled=3, new_proposals=2, changed_proposals=1)
+    assert "**2 new proposals**" in body
+    assert "**1 changed date**" in body
+    assert "3 new" not in body
+
+
 def test_a_host_awaiting_approval_is_not_reported_as_one_already_declined():
     """`skipped_host` is a click at /admin/fetch-domains; `skipped_declined` is
     a human's answered no. Mutation: adding the two together -- the owner is

@@ -33,13 +33,14 @@ proposal seen again rather than found. A truncated run says so
 lists are what makes two different silences distinguishable.
 
 A DAILY PASS RE-PROPOSES EVERYTHING IT HAS NOT BEEN ANSWERED ABOUT, and that
-is why `new_proposals` counts ROWS CREATED rather than sightings. The same
-page yields the same claim tomorrow; `new_proposals` (the pure diff) filters
-only rounds the concert HOLDS and `dismissed_keys_for` only rounds the owner
-REFUSED, so a proposal sitting unreviewed passes both and `upsert_proposal`
-rewrites the row it already has. Counted as new, that would tell the owner
-"1 new proposal" every single day until they act -- which trains them to
-ignore the one message that also carries the rejection reasons.
+is why `report.new_proposals` counts ROWS CREATED rather than sightings. The
+same page yields the same claim tomorrow; `classify_proposals` (the pure diff)
+filters only rounds the concert HOLDS UNCHANGED and `dismissed_keys_for` only
+rounds the owner REFUSED, so a proposal sitting unreviewed passes both and
+`upsert_proposal` rewrites the row it already has. Counted as new, that would
+tell the owner "1 new proposal" every single day until they act -- which
+trains them to ignore the one message that also carries the rejection
+reasons.
 
 WHAT IT NEVER DOES. It writes no `Round`: a proposal is a claim about a
 third-party page made by a model, and phase 1 puts nothing in front of a user
@@ -136,11 +137,14 @@ from app.domain.round_completion import (
 )
 from app.domain.round_evidence import verify_rounds
 from app.domain.round_proposals import (
+    APPLIES_TO_FIELD,
     CLOSES_AT_FIELD,
     OPENS_AT_FIELD,
+    PAYMENT_AT_FIELD,
+    RESULTS_AT_FIELD,
     HeldRound,
+    classify_proposals,
     dedupe_key,
-    new_proposals,
     proposed_stamp_utc,
 )
 
@@ -211,16 +215,31 @@ class PollReport:
     # (a re-sighting must not reset "how long has this waited"), so that stamp
     # is what tells the two apart.
     new_proposals: int = 0
+    # Rows this poll CREATED from the CHANGED bucket -- a round the concert
+    # already holds, whose closing, results or payment date the page now says
+    # has moved. Counted APART from `new_proposals`: Phase 2's write path is
+    # creates-only (owner ruling, 2026-08-14) -- a moved date is surfaced,
+    # never applied, and a later task renders it on the review page with no
+    # Approve button, so the digest must let the reader tell "brand new" from
+    # "already yours, but the date moved" apart at a glance. Same
+    # insert-vs-resighting split as `new_proposals`/`refreshed`, for the
+    # identical reason: a re-sighting of an unreviewed change goes to
+    # `refreshed`, or the same postponed date would read as "1 changed" every
+    # single day until the owner acts.
+    changed_proposals: int = 0
     # Seen again, still pending, row rewritten with today's reading. Reported
     # because "the page still says this" is a different fact from silence.
+    # Covers a re-sighting from EITHER bucket -- new or changed -- since both
+    # answer the identical question ("is this still sitting unreviewed").
     refreshed: int = 0
     # Proposed, grounded, new -- and matching a key the owner dismissed. Not
     # silent: a page that keeps re-offering a refused round is worth seeing.
     skipped_dismissed: int = 0
-    # Proposed, grounded -- and the concert already holds it. The ordinary
-    # outcome on a page whose ladder has not moved, and counted for the same
-    # reason as everything else here: an outcome with no counter and no row is
-    # indistinguishable from a page that said nothing at all.
+    # Proposed, grounded, and IDENTICAL to what the concert already holds --
+    # neither new nor changed. The ordinary outcome on a page whose ladder has
+    # not moved, and counted for the same reason as everything else here: an
+    # outcome with no counter and no row is indistinguishable from a page that
+    # said nothing at all.
     skipped_held: int = 0
     rounds_rejected: int = 0
     tokens_in: int = 0
@@ -303,12 +322,21 @@ def build_poll_digest(report: PollReport, *, base_url: str) -> str:
     with a suppressed quiet day a broken pass and a quiet one would look
     identical -- the exact silence this whole feature is built to remove.
 
-    Two distinctions the wording keeps apart, because each was built on purpose:
+    Three distinctions the wording keeps apart, because each was built on
+    purpose:
 
     * NEW vs SEEN AGAIN. The pass re-reads the same page daily, so a proposal
       nobody has reviewed is re-proposed every day until they act. Folded
       together, this DM would say "1 new proposal" every morning, which teaches
       its reader to skim past the rejection list underneath it.
+    * NEW vs CHANGED. A CHANGED proposal is a round the concert already holds
+      whose closing, results or payment date the page now says has moved --
+      the likeliest true find this pass can make, since a concert goes quiet
+      precisely because its stored deadlines are in the past. Phase 2's write
+      path is creates-only (owner ruling, 2026-08-14): a moved date is
+      surfaced, never applied, and the review page renders it with no Approve
+      button. Summed into `new_proposals` this DM would send the reader to
+      click a button that is not there for half the count.
     * WAITING ON YOU vs ALREADY REFUSED. `skipped_host` is a click at
       /admin/fetch-domains; `skipped_declined` is a human's answered no.
       Reporting a declined host as "waiting for approval" sends the reader to a
@@ -327,6 +355,12 @@ def build_poll_digest(report: PollReport, *, base_url: str) -> str:
         )
     else:
         lines.append("No new proposals.")
+    if report.changed_proposals:
+        lines.append(
+            f"**{_plural(report.changed_proposals, 'changed date')}** on a round "
+            "the concert already holds, for review only — "
+            f"{base_url}/admin/quiet-ladders/proposals"
+        )
     if report.refreshed:
         lines.append(
             f"{_plural(report.refreshed, 'proposal')} seen again, still waiting "
@@ -457,12 +491,42 @@ async def _candidates(
     return pairs
 
 
+def _applies_to_labels(candidate) -> list[str]:
+    """The leg LABELS this proposed round names, as a list of strings.
+
+    Labels, never `ConcertDay` ids, and that is not a shortcut: the model is
+    given the concert as a draft-vocabulary document and told to copy names out
+    of its `performances`. It never sees an id, so an id is not a thing it
+    could return. `verify_rounds` has already refused any round naming a leg
+    the draft lacks, so what arrives here matches a real leg by name; the
+    review page does the label -> leg lookup at render time.
+
+    Coerced with `str(...).strip()` -- the SAME normalization `verify_rounds`
+    compares under, so what is stored is what was checked. It is not cosmetic:
+    `parse_completion_response` stringifies only the four TIMESTAMP_FIELDS and
+    passes everything else through as PyYAML resolved it, so a leg labelled
+    `2026-01-05` arrives here as a `datetime.date`, which is not
+    JSON-serializable and would raise inside the flush -- a SQLAlchemyError,
+    the one family `run_round_poll` refuses to absorb, so one such label would
+    abandon the whole run.
+
+    Empty for anything that is not a list. `verify_rounds` rejects a non-list
+    `applies_to` outright, so this cannot happen through the pass; the guard is
+    here so the shape of what reaches a NOT NULL JSON column does not depend on
+    a check made in another module.
+    """
+    raw = candidate.data.get(APPLIES_TO_FIELD)
+    if not isinstance(raw, list):
+        return []
+    return [str(leg).strip() for leg in raw]
+
+
 def _fold_duplicate_keys(fresh, event_id: str, report: PollReport) -> list:
     """`fresh` with any second reading of the SAME key dropped, first one kept.
 
     ONE reply can carry two rounds that collapse to one `dedupe_key` -- same
     label, same opening time, differing only in `apply_closes_jst` or in which
-    legs they name. `new_proposals` cannot see that: it diffs the proposed
+    legs they name. `classify_proposals` cannot see that: it diffs the proposed
     rounds against the ones the concert HOLDS, and neither of these is held, so
     both survive it.
 
@@ -489,6 +553,80 @@ def _fold_duplicate_keys(fresh, event_id: str, report: PollReport) -> list:
         seen.add(key)
         kept.append(candidate)
     return kept
+
+
+async def _store_candidates(
+    session: AsyncSession,
+    row,
+    url: str,
+    now: datetime,
+    report: PollReport,
+    candidates,
+    dismissed: set[str],
+    *,
+    bucket: str,
+) -> None:
+    """Upsert every candidate in one classified bucket (`"fresh"` or
+    `"changed"`), applying the dismissed-key skip and the kind warning the
+    same way for both.
+
+    The two buckets differ only in what an INSERT means -- a brand-new round
+    versus a moved date on one the concert already holds -- and `bucket` picks
+    which counter an insert lands in. A re-sighting always lands in
+    `report.refreshed` regardless of `bucket`: "is this still sitting
+    unreviewed" is the same question whichever list found it, and `refreshed`
+    is what stops that question being asked, and answered "yes", forever.
+    """
+    for candidate in candidates:
+        opens_at_utc = proposed_stamp_utc(candidate, OPENS_AT_FIELD)
+        if dedupe_key(candidate.label, opens_at_utc) in dismissed:
+            report.skipped_dismissed += 1
+            continue
+        kind_warnings: list[str] = []
+        kind = _round_kind(
+            candidate.data.get("kind"), f"round {candidate.label!r}", kind_warnings
+        )
+        for warning in kind_warnings:
+            # Into `rejections` like every other reason, not only the journal:
+            # the round IS stored (as `other`), but "the model named a mechanic
+            # this app does not have" is exactly the sort of thing the digest's
+            # reader needs to see before trusting the kind on a review screen.
+            log.info("round poll: %s: %s", row.event_id, warning)
+            report.rejections.append(f"{row.event_id}: {warning}")
+        proposal = await upsert_proposal(
+            session,
+            row.concert_id,
+            label=candidate.label,
+            kind=kind,
+            opens_at_utc=opens_at_utc,
+            closes_at_utc=proposed_stamp_utc(candidate, CLOSES_AT_FIELD),
+            # All four anchors, through the ONE parser -- see
+            # `proposed_stamp_utc`. `verify_rounds` has already grounded each
+            # of these against the page and refused the round outright if it
+            # could not, so storing two of them and discarding the other two
+            # threw away work that was already done and checked.
+            results_at_utc=proposed_stamp_utc(candidate, RESULTS_AT_FIELD),
+            payment_deadline_at_utc=proposed_stamp_utc(candidate, PAYMENT_AT_FIELD),
+            applies_to_labels=_applies_to_labels(candidate),
+            # The quotes, keyed by the field each one grounds -- already
+            # trimmed by `verify_rounds` to the timestamps it actually checked
+            # against the page, so nothing unverified can ride onto a review
+            # screen under a heading that says it was read from the page.
+            evidence_yaml=yaml.safe_dump(
+                dict(candidate.evidence), allow_unicode=True, sort_keys=False
+            ),
+            source_url=url,
+            now=now,
+        )
+        # Created today, or seen again. `first_seen_at` is the only honest
+        # discriminator: `upsert_proposal` deliberately never refreshes it, so
+        # a row still carrying today's `now` is one this run inserted.
+        if proposal.first_seen_at != now:
+            report.refreshed += 1
+        elif bucket == "fresh":
+            report.new_proposals += 1
+        else:
+            report.changed_proposals += 1
 
 
 async def _poll_one(
@@ -556,55 +694,35 @@ async def _poll_one(
         f"{row.event_id}: {reason}" for reason in (*verdict.rejected, *warnings)
     )
 
-    held = [HeldRound(label=r.label, opens_at_utc=r.opens_at_utc) for r in row.rounds]
-    fresh = new_proposals(held, verdict.accepted)
-    # Grounded, and the concert already has it. The single most common outcome
-    # of a poll and the one most easily left uncounted.
-    report.skipped_held += len(verdict.accepted) - len(fresh)
+    held = [
+        HeldRound(
+            label=r.label,
+            opens_at_utc=r.opens_at_utc,
+            closes_at_utc=r.closes_at_utc,
+            results_at_utc=r.results_at_utc,
+            payment_deadline_at_utc=r.payment_deadline_at_utc,
+        )
+        for r in row.rounds
+    ]
+    classified = classify_proposals(held, verdict.accepted)
+    fresh, changed = classified.fresh, classified.changed
+    # Grounded, and IDENTICAL to what the concert already holds -- neither
+    # bucket claimed it. The single most common outcome of a poll and the one
+    # most easily left uncounted.
+    report.skipped_held += len(verdict.accepted) - len(fresh) - len(changed)
     # BEFORE the dismissed check, not after: a duplicate of a key the owner
-    # refused would otherwise count as two dismissals of one round.
+    # refused would otherwise count as two dismissals of one round. Each
+    # bucket folds against itself only -- `classify_proposals` puts a given
+    # proposed round in exactly one of the two, so they cannot share a key.
     fresh = _fold_duplicate_keys(fresh, row.event_id, report)
+    changed = _fold_duplicate_keys(changed, row.event_id, report)
     dismissed = await dismissed_keys_for(session, row.concert_id)
-    for candidate in fresh:
-        opens_at_utc = proposed_stamp_utc(candidate, OPENS_AT_FIELD)
-        if dedupe_key(candidate.label, opens_at_utc) in dismissed:
-            report.skipped_dismissed += 1
-            continue
-        kind_warnings: list[str] = []
-        kind = _round_kind(
-            candidate.data.get("kind"), f"round {candidate.label!r}", kind_warnings
-        )
-        for warning in kind_warnings:
-            # Into `rejections` like every other reason, not only the journal:
-            # the round IS stored (as `other`), but "the model named a mechanic
-            # this app does not have" is exactly the sort of thing the digest's
-            # reader needs to see before trusting the kind on a review screen.
-            log.info("round poll: %s: %s", row.event_id, warning)
-            report.rejections.append(f"{row.event_id}: {warning}")
-        proposal = await upsert_proposal(
-            session,
-            row.concert_id,
-            label=candidate.label,
-            kind=kind,
-            opens_at_utc=opens_at_utc,
-            closes_at_utc=proposed_stamp_utc(candidate, CLOSES_AT_FIELD),
-            # The quotes, keyed by the field each one grounds -- already
-            # trimmed by `verify_rounds` to the timestamps it actually checked
-            # against the page, so nothing unverified can ride onto a review
-            # screen under a heading that says it was read from the page.
-            evidence_yaml=yaml.safe_dump(
-                dict(candidate.evidence), allow_unicode=True, sort_keys=False
-            ),
-            source_url=url,
-            now=now,
-        )
-        # Created today, or seen again. `first_seen_at` is the only honest
-        # discriminator: `upsert_proposal` deliberately never refreshes it, so
-        # a row still carrying today's `now` is one this run inserted.
-        if proposal.first_seen_at == now:
-            report.new_proposals += 1
-        else:
-            report.refreshed += 1
+    await _store_candidates(
+        session, row, url, now, report, fresh, dismissed, bucket="fresh"
+    )
+    await _store_candidates(
+        session, row, url, now, report, changed, dismissed, bucket="changed"
+    )
     report.polled += 1
 
 

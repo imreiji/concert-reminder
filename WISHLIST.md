@@ -1344,90 +1344,7 @@ that changed is Preferences' Auto-apply toggle, which sits in the same
 change was one word of copy, not a control, and `PresetItem` still has no
 minutes column. Seventeen passes, seventeen identical verdicts.
 
-### 2. Round watch: the two shapes it did not ship
-
-Impact: medium (down from high, on merit -- the failure is now VISIBLE, and the
-entry that filed it called visibility "most of the value") - effort: one small,
-one now-medium (down from large, 2026-08-13 -- see below). Raised: 2026-08-05;
-the cheapest of its three shapes shipped 2026-08-11 and is in Shipped below;
-the large shape's PHASE 1 shipped 2026-08-13, also in Shipped below. Phase 2 of
-that shape and the small shape are both still open and are what remains here.
-
-**Phase 1 of the large shape shipped 2026-08-13** (branch `round-poll`, spec
-`docs/superpowers/specs/2026-08-13-round-poll-design.md`, Shipped entry below).
-What exists now: a flag-gated (`ROUND_POLL_ENABLED`, off by default) daily pass
-that re-reads each quiet concert's own official page with DeepSeek, reusing
-AI triage's own phase 2 (`draft_completion`)'s `completion_prompt` and
-`verify_rounds` rather than owning a second prompt or a second safety rule,
-and records what it finds as `RoundProposal`
-rows -- reviewable, read-only, at `/admin/quiet-ladders/proposals`. What does
-NOT exist yet: nothing turns a proposal into a live `Round`. There is no draft
-or review page beyond the read-only list, `RoundProposal.applied_at` is
-written by nothing in the codebase, and a proposal nobody has looked at is
-simply re-read and re-shown every day rather than accumulating toward
-anything. That review-and-apply half is phase 2, unbuilt, and is the effort
-downgrade above: the expensive parts -- the fetch policy, the host-approval
-queue, the prompt, the data model -- already exist, so what is left is a
-review UI and one write path, not a subsystem built from nothing. **The small
-shape -- teaching the discovery matcher a round-gap dimension -- is untouched
-by any of this** and remains exactly as unstarted as the day it was filed;
-nothing about the poll reads or writes anything the matcher consumes.
-
-The problem statement is the parent entry's and is not repeated here -- it is
-in the Shipped entry, verbatim, with the 2026-08-05 evidence still attached.
-What changed on 2026-08-11 is the DEFENCE. Until then, in that entry's own
-words, "the only current defense is the owner remembering to re-check"; now
-`/admin/quiet-ladders` lists every catalogue concert whose ladder holds no
-future deadline, longest-unattended first, and a digest DM names each one
-within a minute of it going quiet. The failure is still reachable -- it is
-simply no longer silent -- and both shapes below are now automation of a
-problem somebody can SEE rather than the only way to see it at all.
-
-**Teach the discovery matcher the round dimension** (small). A calendar lead
-naming a round its matched tracked concert LACKS should flag "round gap"
-instead of only the date+venue hint. It covers feed-covered franchises only,
-but the catch that filed the parent entry proves the signal is real and already
-arriving: the 蓮ノ空 103期卒業公演's missing アップグレード rounds (1次 AND 2次)
-surfaced SOLELY because fan-calendar leads happened to name them, in a session
-that came close to pruning those leads unread. What it gained on 2026-08-11 is
-a destination it did not have when it was filed -- and, more usefully, a reason
-to exist beside a surface that might have looked like it obsoleted it. It does
-not: the quiet-ladders predicate cannot see this case BY CONSTRUCTION. A
-concert holding a future anchor and a missing round is not quiet, so it is
-absent from that list however long its gap persists, and a round-gap flag is
-the only proposed signal that catches it.
-
-**A scheduled re-fetch of each concert's own official URL** (was large; now
-medium -- phase 1 of it shipped 2026-08-13, what's below is what's LEFT). The
-re-fetch pass this originally proposed is built: `app/round_poll.py`
-(`ROUND_POLL_ENABLED`) consumes `quiet_ladder_rows` as its candidate list
-exactly as this entry specified rather than a second scan of the catalogue,
-reads under `ApprovedPublicHosts` and the `/admin/fetch-domains` queue exactly
-as this entry required rather than trusting an editor-supplied host on its
-own say-so, and its rounds are evidence-grounded through `verify_rounds`
-exactly as this entry assumed. **What remains is the half this entry never
-had to design because the re-fetch didn't exist yet: turning an accepted
-`RoundProposal` into a live `Round`.** That needs a draft/review page (the
-proposals list at `/admin/quiet-ladders/proposals` is read-only), a per-round
-apply action that writes `RoundProposal.applied_at` and a real `Round` row in
-one transaction, and the queue-sync call every round write already owes
-(invariant 2) -- none of which exists. `docs/architecture.md`'s Round poll
-entry records the traps phase 1 already found the hard way (the resume-order
-re-sort, the dedupe key's minute truncation, the wall-clock budget); phase 2
-inherits that data model and those traps rather than starting over.
-
-**Ranked #2, down from #1, on merit rather than by removal**, and the criterion
-is the parent entry's own. It was filed at #1 on the correctness-family
-precedent with the explicit note that "unlike the crawler entry that briefly
-sat here, no edge mitigation stands behind this one". One now does. That
-mitigation is human-dependent -- it works when the owner reads the DM and walks
-the list -- so this is a demotion and not a closure, which is what separates
-medium from low. Minute-level offsets takes #1 above it on the tiebreak that it
-delivers a whole user-visible capability, where what remains here is the
-minority half of one: the parent entry itself judged that making the failure
-visible was "most of the value".
-
-### 3. Franchise-aware round-label suggestions
+### 2. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -1461,7 +1378,7 @@ own phrasing habits rather than by real editorial usage, so whoever builds the
 franchise ranking should look at what the counts actually contain before
 trusting the ORDER BY.
 
-### 4. Ten of eleven `RoundKind` members are purely cosmetic
+### 3. Ten of eleven `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -1506,6 +1423,50 @@ data-driven refactor: this consumer is deliberately NOT the full set
 (RESULT_ANNOUNCEMENT and PAYMENT_DEADLINE are withheld from the model on
 purpose), so a table generated blindly from the enum would silently re-offer
 them.
+
+### 4. Teach the discovery matcher a round-gap dimension
+
+Impact: low-medium (a proven, already-arriving signal, but narrow: it covers
+feed-covered franchises only, and it is the SMALL half of an entry that used
+to be ranked on the strength of its large half) - effort: small (additive to
+the existing matcher, no new data model). Raised: 2026-08-05, as one of three
+shapes filed under "round watch"; the cheapest of the three shipped
+2026-08-11, the large shape shipped in full across 2026-08-13 (phase 1) and
+2026-08-14 (phase 2) -- both in Shipped below. This is what remains: the one
+shape neither of those builds touches, re-ranked on its own merits per
+CLAUDE.md's WISHLIST rule rather than left inheriting the parent entry's old
+#2.
+
+A calendar lead naming a round its matched tracked concert LACKS should flag
+"round gap" instead of only the date+venue hint. The catch that filed the
+parent entry proves the signal is real and already arriving: the 蓮ノ空 103期
+卒業公演's missing アップグレード rounds (1次 AND 2次) surfaced SOLELY because
+fan-calendar leads happened to name them, in a session that came close to
+pruning those leads unread.
+
+**The round poll, now complete in both phases, does not obsolete this and
+cannot by construction.** `app/round_poll.py` (`round_poll.py`'s own module
+docstring; `docs/architecture.md`'s Round poll entry) only ever visits a
+concert `quiet_ladder_rows` returns, and a concert is quiet only once every
+one of its live rounds' four anchor fields is in the past. A concert holding
+a FUTURE anchor -- the ordinary case for a healthy campaign mid-ladder -- is
+never quiet, so it never reaches the poll's candidate list, however long a
+round it should also hold is missing from it. Round watch's own worklist has
+the identical blind spot for the identical reason (`quiet_ladder_rows` is the
+poll's candidate source). This entry is the only proposed signal that reads
+the concert while it is still LIVE rather than waiting for it to go quiet.
+
+Placed here, right after the `RoundKind` entry (impact LOW) and right before
+in-app LLM extraction (impact low-medium, medium effort): this entry's own
+low-medium impact belongs above a plain-LOW entry by the file's own
+impact-first ordering, and its SMALL effort puts it above a same-tier
+low-medium/medium-effort entry on the effort tiebreak this file already uses
+when impact ties (the same tiebreak that once moved in-app LLM extraction
+itself). Not ranked at #2, which is where the combined entry sat: the honest
+case against that is the caveat this entry has always carried on its own --
+real, not hypothetical, but narrow (feed-covered franchises only), and the
+majority of what made the combined entry worth #2 was the automation that
+makes a quiet ladder actionable at all, which is the part that just shipped.
 
 ### 5. In-app LLM extraction on the import page
 
@@ -2421,7 +2382,9 @@ convention are all real options; none has been picked). Raised: 2026-08-13,
 during round poll's own task-6 documentation pass, which needed to run the
 suite and could not.
 
-`pytest -q --collect-only` counts 2,957 tests as of this build (2026-08-14).
+`pytest -q --collect-only` counts 3,019 tests as of this build (2026-08-14,
+round 1 of its own documentation pass -- the count drifts by the pass itself,
+since round 1 added one test to `test_admin_round_proposals.py`).
 A full `uv run pytest -q` run measures at roughly 650 seconds against this
 harness's own foreground command ceiling of 600 seconds (600,000ms) -- so a
 full verification pass can no longer complete inside a single foreground
@@ -2438,36 +2401,46 @@ inconvenient, workaround -- this is the latter. It will keep growing on its
 own as the suite does; nothing about fixing it needs to wait for evidence the
 way #20 does.
 
-### 24. Round poll phase 2's three known gaps
+### 24. Round poll's one remaining known gap: a doubled proposal over-counts the tally
 
-Impact: nil today (phase 2 -- the apply flow these gaps live inside -- is
-unbuilt, and phase 1 itself defaults off) - effort: small once phase 2 exists
-(three targeted fixes against code that will already be there, not a design
-change). Raised: 2026-08-13, round poll phase 1's own build; recorded here so
-phase 2 does not rediscover them as bugs.
+Impact: low (`ROUND_POLL_ENABLED` still defaults off, and even switched on
+this is a digest COUNT reading one candidate too high on a specific
+double-reading case -- not a stored-data loss and not a reminder-timing
+defect) - effort: small (one counting fix inside `_store_candidates`
+(`app/round_poll.py`), not a design change). Raised: 2026-08-13, round poll
+phase 1's own build, as one of three known gaps; two of the three are now
+CLOSED by phase 2 (2026-08-14, see below) and this is what remains.
 
-**A round whose CLOSING time alone moved is dropped silently.** `dedupe_key`
-(`domain/round_proposals.py`) is built from the label and `opens_at_utc`
-only. A concert reaches the poll's candidate list BECAUSE it is quiet, and
-quiet requires every one of a live round's four anchor fields --
-`opens_at_utc`, `closes_at_utc`, `results_at_utc`, `payment_deadline_at_utc`
--- to already be in the past (`next_anchor_at`, `db/core.py`). So a round
-whose closing date alone was pushed forward produces the identical key to the
-one already on file, reads as `skipped_held` ("the concert already holds
-it"), and the moved deadline never reaches a reviewer.
+**CLOSED by phase 2 -- a round whose CLOSING time alone moved is no longer
+dropped silently.** `classify_proposals` (`domain/round_proposals.py`) now
+compares all three non-key anchors -- `closes_at_utc`, `results_at_utc`,
+`payment_deadline_at_utc` -- through the shared `anchors_differ` predicate,
+not only the dedupe key's opening time, so a round whose closing date alone
+moved now classifies CHANGED and reaches the digest and the draft page
+instead of silently matching the held key as `skipped_held`. It still cannot
+be APPLIED (phase 2's write path is creates-only by owner ruling), but it is
+SURFACED, which is what this gap was about. See `docs/architecture.md`'s
+Round poll entry for why `anchors_differ` is shared rather than copied.
 
-**Nothing prunes a proposal whose round the owner later adds BY HAND.** A
-`RoundProposal` upserted today and a `Round` typed in tomorrow through the
-ordinary edit page are two unrelated rows -- nothing compares them -- so the
-proposal sits in `pending_proposals` forever even once the concert holds
-exactly what it proposed, and the concert has by then usually left the
-candidate list entirely (it is no longer quiet), so no future poll run will
-ever re-derive `skipped_held` for it either. The stale proposal is only
-visible on `/admin/quiet-ladders/proposals`, never re-surfaced anywhere the
-owner would think to look again.
+**CLOSED by phase 2, with a gap round 1 of this docs review caught and
+closed too -- a proposal whose round the owner later adds by hand now
+resolves itself, on BOTH pages.** `classify_stored_proposal`
+(`db/round_proposals.py`) derives NEW/CHANGED/`"resolved"` at RENDER time
+rather than storing a flag on the row, so a proposal whose round now matches
+the concert's held rounds exactly reads `"resolved"`. Phase 2 as originally
+built only wired that into `_draft_row`, the PER-CONCERT page; the review
+QUEUE (`pending_proposal_groups`, the page the digest DM actually links to)
+kept listing the same proposal with a phantom pending count, discoverable
+only by drilling into the concert -- the exact worklist-that-never-empties
+failure this gap was filed against, reopened on the one page phase 1's own
+text named by address ("only visible on `/admin/quiet-ladders/proposals`").
+`pending_proposal_groups` now runs the identical `classify_stored_proposal`
+check and drops a concert whose every proposal resolves entirely, so the
+queue empties the same way the draft page does. Same architecture.md entry.
 
-**A doubled proposal in one LLM reply over-counts the new-vs-refreshed
-tally.** `upsert_proposal`'s unique index on `(concert_id, dedupe_key)`
+**STILL OPEN -- a doubled proposal in one LLM reply over-counts the
+new-vs-refreshed tally.** `upsert_proposal`'s unique index on
+`(concert_id, dedupe_key)`
 correctly resolves two identical candidates in one reply to ONE row -- the
 second call's `SELECT` finds the row the first call just flushed. But
 `_poll_one` increments `report.new_proposals`/`report.refreshed` once per
@@ -2477,11 +2450,93 @@ first call, in the same run), so it counts as new again. A model repeating
 itself within one reply reports "2 new proposals" for a database that gained
 one row.
 
+### 25. Round poll: an edited opening time can create a label-duplicate neither refusal catches
+
+Impact: low today (needs a specific combination: a genuinely-new proposal, an
+admin who edits its opening time on the draft page, AND a concert that
+already holds a different round under the identical label -- and
+`ROUND_POLL_ENABLED` still defaults off) but not hypothetical, since editing
+the opening time is exactly what the draft page's fields exist for - effort:
+not a one-word answer, since closing it is a design decision about round
+identity, not a bug fix. Raised: 2026-08-14, during round poll phase 2's own
+final documentation pass (task 6), re-reviewing the two refusals
+`apply_round_proposal` (`web/routes/quiet_ladders.py`) already has.
+
+**The shape.** Both refusals key on `dedupe_key(label, opens_at_utc)` --
+`classify_stored_proposal` on the STORED proposal's key, `apply_round_proposal`
+itself on the round the FORM is about to write. Neither ever compares on
+LABEL alone. So: a proposal the pass genuinely could not match to anything
+held (classifies "new", refusal 1 passes) proposes round X opening at T1. An
+admin, using the draft page's editable opening-time field exactly as it is
+meant to be used, corrects that box to T3 -- a moment nothing is held at
+either, so `dedupe_key(X, T3)` is not in `held_by_key` and refusal 2 also
+passes. The write proceeds. If the concert ALREADY holds a different round
+also labelled X, opening at some other time T2, the concert now carries two
+`Round` rows both named X, at two different times -- a label-duplicate
+neither refusal was asked to catch, because neither asks "does this concert
+already have a round with this label" at all.
+
+**Why it is a design decision and not a fix.** This is the exact mirror of
+the shape the STORED-side refusal exists to refuse -- there, an edited
+opening time walks a proposal INTO the same `(label, opens)` key an existing
+round already holds (closed by `99b87f2`, the submitted-side refusal); here,
+an edited opening time walks a proposal AWAY from every `(label, opens)` key
+that exists, past a concert that still shares its label with something else.
+Refusing it would mean comparing on LABEL ALONE somewhere in this path -- but
+`(label, opens_at_utc)` together, never label alone, is the identity this
+whole feature uses throughout: `dedupe_key` (`domain/round_proposals.py`)
+is deliberately keyed on both, precisely because a real concert CAN
+legitimately hold two rounds sharing a generic label ("1次先行", "抽選") at
+two genuinely different times -- see that module's own docstring for why
+label-alone keying was rejected once already, for the opposite reason (it
+would swallow a moved date as "the same round"). A guard here would need to
+decide, with no evidence beyond "the label already exists elsewhere on this
+concert", whether that is a genuine second round or an admin's typo -- a
+judgement call for the owner, not a predicate this pure diff can make on its
+own.
+
+**Revision-pass note (2026-08-14, round poll phase 2 -- full pass required by
+CLAUDE.md's WISHLIST rule after every shipped feature):** old-#2's LARGE
+shape moves to Shipped in full (below, both phases); its small shape is
+re-ranked on its own merits per this pass's own brief rather than left
+inheriting old-#2's rank, landing at #4 (low-medium impact, small effort,
+placed after the `RoundKind` cosmetic entry and before in-app LLM extraction
+on the effort tiebreak this file already uses). Old-#3 and old-#4 renumber to
+#2 and #3 by POSITION ALONE, not on merit, since removing old-#2 shifts
+everything below it down by one and the small shape's insertion point
+(directly before old-#5) happens to exactly cancel that shift for old-#5
+onward -- #5 through #23 name the same entries today they did yesterday. #24
+is updated in place: two of its three known gaps (the moved-closing-time
+drop, the hand-added-round staleness) close with this build and are marked
+CLOSED in the entry itself rather than deleted, so the record shows what
+phase 2 actually fixed; the third (the doubled-proposal tally over-count) is
+untouched, since it is unrelated to phase 2's scope. One new entry appended,
+#25 above, filed during this pass's own final review of the two refusals
+`apply_round_proposal` accumulated across tasks 3-5 (three verdicts, then two
+refusals) -- the mirror shape neither refusal was built to catch. One Shipped
+entry added (below, phase 2). The other twenty entries (#1, #5-#23 besides
+#24) were re-read against this build specifically, not skimmed: phase 2 adds
+one route module's worth of write paths behind an admin-only page and a flag
+that still defaults off, and touches no reminder math, no round taxonomy
+outside what #24's own entry already named, no mobile or demo surface and no
+calendar roster. #6 (four long jobs share the tick) and #5 (in-app LLM
+extraction) were the two checked closely, for the same reason phase 1's own
+pass checked them, and the same-day re-read below settles what shifted: #6 is
+unchanged in substance (the fourth-job argument phase 1 already made stands
+exactly as made, and this build added no fifth); #5 is unchanged (phase 2
+calls `app.llm.chat` through the same `completion_prompt` phase 1 already
+used, no new contact). Judgement: nothing else moves. Recorded explicitly
+rather than left implicit, per the instruction that a revision pass leaving
+no trace is indistinguishable from one that never happened.
+
 **Revision-pass note (2026-08-13, round poll phase 1 -- full pass required by
 CLAUDE.md's WISHLIST rule after every shipped feature):** one entry updated
 in place (#2, above -- NOT moved to Shipped, since phase 2 of the large shape
-and the small shape both remain open), three entries appended (#22-#24,
-above), one Shipped entry added (below), no other entry re-ranked. The
+and the small shape both remain open; old #2 -- round poll's large shape
+shipped in full 2026-08-14, its small shape stands alone as #4 today, and #2
+now names a different entry entirely, "Franchise-aware round-label
+suggestions"), three entries appended (#22-#24, above), one Shipped entry
+added (below), no other entry re-ranked. The
 twenty entries besides #2 were re-read against this build specifically, not
 skimmed, and the shared answer is that a flag-gated daily pass reading
 quiet concerts' own pages and writing nothing but review rows touches almost
@@ -2739,9 +2794,10 @@ Branch `round-poll`, six tasks, spec
 `docs/superpowers/specs/2026-08-13-round-poll-design.md`, plan
 `docs/superpowers/plans/2026-08-13-round-poll-phase-1.md`, migration
 `05ce13fac69a` (`round_proposals`, `round_poll_state`,
-`concerts.ladder_polled_at_utc`). This is Proposed #2's LARGE shape, and only
-phase 1 of it -- see #2 above, updated in place rather than moved here, for
-what still does not exist.
+`concerts.ladder_polled_at_utc`). This was Proposed old-#2's LARGE shape,
+phase 1 of it (old-#2, "Round watch: the two shapes it did not ship" -- the
+large shape completed in phase 2 below, 2026-08-14, and the small shape now
+stands alone as #4).
 
 **What it does.** A `ROUND_POLL_ENABLED`-gated daily pass (off by default)
 consumes round watch's own `quiet_ladder_rows` as its candidate list, re-reads
@@ -2802,6 +2858,72 @@ rule claimed autogenerate leaves an `import app.db.models` line to remove by
 hand, and zero of the ~50 committed revisions contain that import (Alembic
 renders a `TypeDecorator` as a fully-qualified dotted name and adds nothing to
 `${imports}`), so there was never a line to remove.
+
+### Round poll, phase 2 of 2 (2026-08-14)
+
+Branch `round-poll-phase-2` (no PR yet), six tasks, spec
+`docs/superpowers/specs/2026-08-14-round-poll-phase-2-design.md`, plan
+`docs/superpowers/plans/2026-08-14-round-poll-phase-2.md`, migration
+`fc4a98ad678a` (`round_proposals` gains `results_at_utc`,
+`payment_deadline_at_utc`, `applies_to_labels`; zero rows to backfill, since
+`ROUND_POLL_ENABLED` has never been on in production). This completes
+old-#2's LARGE shape -- see the phase-1 Shipped entry above for what that
+shape's own findings were, and #4 above for the small shape it was always
+paired with and never touches.
+
+**What it does.** Phase 1 could only tell you a round changed; phase 2 lets
+an operator act on it. `GET /admin/quiet-ladders/proposals/{event_id}`
+renders each pending proposal as a real form, every field pre-filled with the
+model's own value and its quoted source line beside it, so a round that is
+90% right can be corrected in the one box the model misread rather than
+dismissed and retyped from scratch in the concert editor. `POST .../apply`
+writes the approved fields onto the concert as a real `Round`, through the
+concert editor's own `build_round` seam, and syncs the reminder queue in the
+same transaction. `POST .../dismiss` stamps "never again" and writes
+nothing else.
+
+**The most consequential decision in the design (owner ruling, 2026-08-14):
+phase 2's write path is creates-only.** The pure diff
+(`domain/round_proposals.py:classify_proposals`) learned a third verdict --
+CHANGED, not just NEW or already-HELD -- so a round whose closing, results or
+payment date moved since it was stored is now SURFACED on the review queue
+and the draft page instead of silently discarded as "already held". But a
+CHANGED row renders no Approve button at all, only Dismiss and a link into
+the ordinary concert editor: phase 2 edits no existing `Round`, ever. Two
+more owner rulings from the same pass, both 2026-08-14: the table widens to
+store all three anchors the prompt already asked for and `verify_rounds`
+already grounded (results and payment, alongside closing, were parsed and
+checked and then thrown away by phase 1's writer), and every field on the
+draft page is a real, editable input rather than a read-only display --
+without that, correcting one misread date would mean dismissing the whole
+proposal.
+
+**Three findings earned their own bullets in `docs/architecture.md`'s Round
+poll entry rather than a footnote:** change-ness (NEW/CHANGED/`"resolved"`)
+is derived at RENDER time and stored nowhere, so a proposal an operator later
+fixes by hand simply resolves itself with no second write to keep in step;
+`anchors_differ` is the ONE field list the pure diff and the stored-proposal
+comparison both call, after an earlier version with two separately-written
+copies survived 37 tests when two of the three fields were deleted from one
+of them; and `/apply` refuses a duplicate TWICE, on two different questions
+neither of which subsumes the other -- the stored-side refusal (asks whether
+the proposal was a change when it was stored) and a second, submitted-side
+refusal keyed off the round the FORM is about to write, because
+`opens_at_utc` is both half the dedupe key and an editable field, and a model
+that misreads an opening date can classify "new" against a round the concert
+already holds -- exactly the ordinary case of an admin correcting that box
+back to the real time. Before the second refusal, that ordinary flow put two
+identical rounds on one concert with `sync_concert` dutifully arming
+reminders for both: this feature's own failure mode, reached through its own
+happy path.
+
+Two of round poll phase 1's own known gaps (WISHLIST #24, filed 2026-08-13)
+close with this build: a round whose closing time alone moved is now
+surfaced rather than dropped, and a proposal whose round is later added by
+hand now resolves itself for the same render-time-derivation reason above.
+The third (a doubled proposal in one LLM reply over-counting the digest
+tally) is unrelated to phase 2's scope and remains open, in #24 above.
+`ROUND_POLL_ENABLED` still defaults off; nothing in this build changes that.
 
 ### Following is due a rework: the four-phase build (2026-08-13)
 

@@ -63,8 +63,67 @@ rounds:
       apply_closes_jst: "申込締切 2026年2月20日(金)23:59"
 """
 
+# The same round with the rest of its ladder on the page: the 当落発表 and the
+# 入金期限 the prompt has always asked for, plus the leg it names. Every stamp
+# here is quoted verbatim below, because `verify_rounds` throws away a round
+# whose evidence it cannot find on the page.
+PAGE_FULL = (
+    "<html><body><p>1次先行抽選 受付開始 2026年1月5日(月)12:00 "
+    "申込締切 2026年1月10日(土)23:59 当落発表 2026年1月15日(木)18:00 "
+    "入金期限 2026年1月20日(火)23:59</p></body></html>"
+)
+
+FULL_REPLY = """\
+rounds:
+  - label: 1次先行抽選
+    kind: lottery_round
+    applies_to: [Day 1]
+    apply_opens_jst: 2026-01-05 12:00
+    apply_closes_jst: 2026-01-10 23:59
+    results_jst: 2026-01-15 18:00
+    payment_deadline_jst: 2026-01-20 23:59
+    evidence:
+      apply_opens_jst: "受付開始 2026年1月5日(月)12:00"
+      apply_closes_jst: "申込締切 2026年1月10日(土)23:59"
+      results_jst: "当落発表 2026年1月15日(木)18:00"
+      payment_deadline_jst: "入金期限 2026年1月20日(火)23:59"
+"""
+
+# TWO legs named badly in the two ways a real reply names them badly, because
+# the writer's `str(leg).strip()` is two guards in one line and each half needs
+# its own leg to bite on:
+#
+# * `2026-01-05` UNQUOTED -- how a model writes a bare token, and how the
+#   prompt's own example writes `applies_to: [Day 1]`. PyYAML resolves it to a
+#   `datetime.date`, which `str()` is what saves. Written with a space in
+#   place of a strip and this leg still passes.
+# * `"　夜公演　"` wrapped in IDEOGRAPHIC SPACE (U+3000), quoted so the
+#   whitespace survives into the value. `.strip()` is what saves this one, and
+#   `str()` alone leaves it untouched. U+3000 rather than U+0020 on purpose:
+#   CLAUDE.md records this project being bitten by SQLite's `trim()` (U+0020
+#   only) disagreeing with Python's Unicode-aware `.strip()` on exactly the
+#   Japanese data this app is full of, and a stray one around a leg label is an
+#   ordinary typo.
+#
+# The whitespace has to arrive in the REPLY rather than on the `ConcertDay`:
+# `draft_leg_labels` strips its own side, so a padded column label would be
+# trimmed before it ever became a leg the model could name.
+DATE_LEG_REPLY = """\
+rounds:
+  - label: 1次先行抽選
+    kind: lottery_round
+    applies_to: [2026-01-05, "　夜公演　"]
+    apply_opens_jst: 2026-01-05 12:00
+    apply_closes_jst: 2026-01-10 23:59
+    evidence:
+      apply_opens_jst: "受付開始 2026年1月5日(月)12:00"
+      apply_closes_jst: "申込締切 2026年1月10日(土)23:59"
+"""
+
 OPENS_UTC = datetime(2026, 1, 5, 3, 0, tzinfo=UTC)    # 2026-01-05 12:00 JST
 CLOSES_UTC = datetime(2026, 1, 10, 14, 59, tzinfo=UTC)  # 2026-01-10 23:59 JST
+RESULTS_UTC = datetime(2026, 1, 15, 9, 0, tzinfo=UTC)   # 2026-01-15 18:00 JST
+PAYMENT_UTC = datetime(2026, 1, 20, 14, 59, tzinfo=UTC)  # 2026-01-20 23:59 JST
 
 
 # A non-zero SENTINEL, never 0: the pause test asserts the recorded sleeps
@@ -101,8 +160,17 @@ def recording_fetch(*, fail_on: str | None = None):
     return _fetch, calls
 
 
-async def _concert(session, event_id, *, official_url=URL, rounds=(), polled_at=None):
-    """One QUIET concert: a future leg and no future anchor on any round."""
+async def _concert(
+    session, event_id, *, official_url=URL, rounds=(), polled_at=None,
+    leg_labels=("Day 1",),
+):
+    """One QUIET concert: future legs and no future anchor on any round.
+
+    `leg_labels` is a parameter because `ConcertDay.label` is free editor text,
+    so neither a DATE-SHAPED label nor one a round names with stray whitespace
+    is exotic -- see `test_leg_labels_are_stored_as_the_strings_verify_matched`,
+    the one test that needs either.
+    """
     await ensure_user(session, USER_ID, "reiji")
     concert = Concert(
         title=event_id, event_id=event_id, official_url=official_url,
@@ -110,10 +178,11 @@ async def _concert(session, event_id, *, official_url=URL, rounds=(), polled_at=
     )
     session.add(concert)
     await session.flush()
-    session.add(ConcertDay(
-        concert_id=concert.id, label="Day 1",
-        starts_at_utc=datetime(2026, 12, 1, 10, 0, tzinfo=UTC),
-    ))
+    for offset, leg_label in enumerate(leg_labels):
+        session.add(ConcertDay(
+            concert_id=concert.id, label=leg_label,
+            starts_at_utc=datetime(2026, 12, 1 + offset, 10, 0, tzinfo=UTC),
+        ))
     for label, opens_at_utc in rounds:
         session.add(Round(
             concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND,
@@ -170,6 +239,131 @@ async def test_a_grounded_round_becomes_a_pending_proposal(session):
     # would silently mark /admin/quiet-ladders' worklist as attended.
     assert concert.ladder_polled_at_utc == NOW
     assert concert.ladder_rechecked_at_utc is None
+
+
+async def test_the_poll_persists_results_payment_and_legs(session):
+    """The whole round reaches the row, not the half phase 1 stored.
+
+    The prompt has asked for `results_jst`, `payment_deadline_jst` and
+    `applies_to` since it was written, and `verify_rounds` grounds each of them
+    against the page BEFORE the pass ever sees the round -- so phase 1's writer
+    was discarding work that had already been done and checked. A results
+    announcement and a payment deadline are two of the anchors this app exists
+    to remind people about.
+
+    Mutation: reverting `_poll_one` to pass only label/kind/opens/closes, which
+    is exactly what shipped in phase 1 -- so this test is what stops a revert.
+    Three separate assertions, because dropping any ONE of the three arguments
+    is a separate edit and a single combined check would let the other two go.
+
+    `applies_to` is asserted as the leg LABEL, not a `ConcertDay` id: the model
+    is handed a draft document and never sees this database, so a label is the
+    only thing it could name.
+    """
+    await _approve(session)
+    await _concert(session, "whole-ladder")
+
+    async def fetch(url):
+        return PAGE_FULL
+
+    report = await run_round_poll(
+        session, NOW, fetcher=fetch, chat=fake_chat(FULL_REPLY)
+    )
+
+    assert (report.polled, report.new_proposals, report.rounds_rejected) == (1, 1, 0)
+    [proposal] = await _proposals(session)
+    assert proposal.results_at_utc == RESULTS_UTC
+    assert proposal.payment_deadline_at_utc == PAYMENT_UTC
+    assert proposal.applies_to_labels == ["Day 1"]
+    # The two phase 1 already stored, so a widening that shuffled the columns
+    # (payment landing in results, say) cannot hide behind the new ones.
+    assert proposal.opens_at_utc == OPENS_UTC
+    assert proposal.closes_at_utc == CLOSES_UTC
+
+
+async def test_a_round_naming_no_legs_stores_an_empty_list(session):
+    """A tour-wide round names no leg, and that is the COMMON case the prompt
+    describes. Mutation: storing None (or the string "None") when `applies_to`
+    is absent -- the convention "empty means every leg" then has two spellings
+    and every reader downstream has to know both.
+
+    `GOOD_REPLY` carries no `applies_to` at all, which is precisely the shape
+    this asserts about.
+    """
+    await _approve(session)
+    await _concert(session, "tour-wide")
+    fetch, _ = recording_fetch()
+
+    await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+
+    [proposal] = await _proposals(session)
+    assert proposal.applies_to_labels == []
+    assert proposal.results_at_utc is None
+    assert proposal.payment_deadline_at_utc is None
+
+
+async def test_leg_labels_are_stored_as_the_strings_verify_matched(session):
+    """What is STORED must be what `verify_rounds` MATCHED: `str(leg).strip()`.
+
+    THE ONLY TEST THAT COVERS THAT COERCION, and it exists because every
+    plausible way to write the line without it is green everywhere else. Two
+    halves, two legs, because each half needs a different leg to bite on and a
+    fixture that exercises only one leaves the other free to be deleted:
+
+    * `str()` -- the leg named `2026-01-05` unquoted. Without it the flush
+      raises and the WHOLE RUN dies (see the chain below).
+    * `.strip()` -- the leg named `"　夜公演　"` in ideographic spaces. Without
+      it the run survives and the damage is quieter: the stored label is not
+      the label `verify_rounds` accepted, so the review page looks it up and
+      finds nothing, and a round that names a real leg renders as naming an
+      unmatched one. `str(date(...))` carries no whitespace, so the date leg
+      alone cannot exercise this even in principle -- which is exactly how
+      dropping `.strip()` stayed green across all 38 tests.
+
+    The `str()` chain, every link of it ordinary:
+
+    * `ConcertDay.label` is free editor text, and a date is a perfectly normal
+      thing to call a leg of a two-night run;
+    * the model names it the way the prompt's own example names a leg --
+      `applies_to: [Day 1]`, unquoted -- and PyYAML resolves an unquoted
+      `2026-01-05` to a `datetime.date`;
+    * `parse_completion_response` stringifies only the four TIMESTAMP_FIELDS
+      and passes every other key through as resolved, so the `date` survives;
+    * `verify_rounds` ACCEPTS the round, because it compares
+      `str(leg).strip()` against the draft's leg labels -- and the draft dumps
+      that label quoted, so the two match exactly;
+    * the flush then raises `StatementError` wrapping `TypeError: Object of
+      type date is not JSON serializable`, which is a `SQLAlchemyError` -- the
+      one family `run_round_poll` deliberately re-raises rather than absorbs.
+
+    So the cost is not one bad column on one proposal. It is the whole run,
+    every paid call in it, and the digest that would have said why.
+
+    Mutations, each its own edit: dropping `str(...).strip()` whole at EITHER
+    guard alone is now caught by the other (defence in depth, deliberate);
+    dropping it at both raises out of `run_round_poll`. Dropping ONLY the
+    `.strip()`, at both, is the quiet one and fails on the second leg.
+    """
+    await _approve(session)
+    await _concert(session, "date-legs", leg_labels=("2026-01-05", "夜公演"))
+
+    async def fetch(url):
+        return PAGE
+
+    report = await run_round_poll(
+        session, NOW, fetcher=fetch, chat=fake_chat(DATE_LEG_REPLY)
+    )
+
+    # The round was believed, not refused: this is a coercion test, and it
+    # would be worthless against a round `verify_rounds` had already thrown out.
+    # Both legs passed rule 7, which is the premise the assertion below rests
+    # on -- the stored form must equal the form that was matched.
+    assert (report.polled, report.new_proposals, report.rounds_rejected) == (1, 1, 0)
+    [proposal] = await _proposals(session)
+    assert proposal.applies_to_labels == ["2026-01-05", "夜公演"]
+    # Strings, not something that merely COMPARES equal to one. `date` does
+    # not, but a future coercion that stringified lazily would.
+    assert all(isinstance(leg, str) for leg in proposal.applies_to_labels)
 
 
 async def test_a_concert_with_no_official_url_is_skipped_and_counted(session):
@@ -288,24 +482,87 @@ async def test_one_concert_failing_does_not_stop_the_run(session):
     assert second.ladder_polled_at_utc == NOW
 
 
-async def test_a_round_the_concert_already_holds_is_not_proposed(session):
+async def test_an_identical_round_still_produces_nothing(session):
     """End-to-end over the pure diff: the model re-reads a page it read before
-    and re-offers a round the catalogue already has. Mutation: dropping the
-    `new_proposals` diff, which re-proposes every existing round every day."""
+    and re-offers a round the catalogue already has, IDENTICAL on every field
+    `classify_proposals` compares. Mutation: dropping the `new_proposals`/
+    `changed_proposals` diff, which re-proposes every existing round every
+    day.
+
+    The regression guard on Task 2's HELD bucket: `closes_at_utc` must match
+    too, not only `label`/`opens_at_utc` -- a round matching only the dedupe
+    key but differing elsewhere is CHANGED (see the test below), not held, and
+    this fixture would wrongly land in `skipped_held` under the old
+    fresh-only behaviour if it left `closes_at_utc` unset."""
     await _approve(session)
-    await _concert(session, "held", rounds=[("1次先行抽選", OPENS_UTC)])
+    concert = await _concert(session, "held")
+    session.add(Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND,
+        label="1次先行抽選", opens_at_utc=OPENS_UTC, closes_at_utc=CLOSES_UTC,
+    ))
+    await session.flush()
     fetch, _calls = recording_fetch()
 
     report = await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
 
     assert await _proposals(session) == []
-    assert report.new_proposals == 0
+    assert (report.new_proposals, report.changed_proposals) == (0, 0)
     # Counted, not merely absent: a grounded round the concert already holds is
     # the commonest outcome of a poll, and with no row and no counter it reads
     # exactly like a page that said nothing at all.
     assert report.skipped_held == 1
     # Grounded, just not new: this must not be reported as a rejection either.
     assert (report.polled, report.rounds_rejected, report.failed) == (1, 0, 0)
+
+
+async def test_a_moved_closing_date_is_stored_as_a_proposal(session):
+    """A concert is quiet precisely because its stored deadlines are in the
+    past, so a postponed closing date is the likeliest true find this pass can
+    make. Mutation: dropping `changed` from what gets upserted -- the pass
+    would find the postponement and throw it away, which is phase 1's
+    behaviour and exactly what the module docstring used to say was
+    deliberately not yet done."""
+    await _approve(session)
+    concert = await _concert(session, "moved", rounds=[("1次先行抽選", OPENS_UTC)])
+    fetch, _calls = recording_fetch()
+
+    report = await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+
+    assert (report.polled, report.changed_proposals, report.new_proposals) == (1, 1, 0)
+    assert report.skipped_held == 0
+    [proposal] = await _proposals(session)
+    assert proposal.concert_id == concert.id
+    assert proposal.label == "1次先行抽選"
+    assert proposal.opens_at_utc == OPENS_UTC
+    # The page's NEW closing time, not the None the row held before.
+    assert proposal.closes_at_utc == CLOSES_UTC
+    assert proposal.first_seen_at == NOW
+
+
+async def test_a_changed_proposal_counts_separately_from_a_new_one(session):
+    """Mutation: summing them into `new_proposals`. Two brand-new concerts and
+    one concert whose closing date moved, so the two counts (2 vs 1) differ --
+    equal counts would let the two counters get swapped without this test
+    noticing."""
+    await _approve(session)
+    await _concert(session, "brand-new-a", official_url="https://eplus.jp/a")
+    await _concert(session, "brand-new-b", official_url="https://eplus.jp/b")
+    await _concert(
+        session, "moved", official_url="https://eplus.jp/moved",
+        rounds=[("1次先行抽選", OPENS_UTC)],
+    )
+    fetch, calls = recording_fetch()
+
+    report = await run_round_poll(session, NOW, fetcher=fetch, chat=fake_chat(GOOD_REPLY))
+
+    assert sorted(calls) == [
+        "https://eplus.jp/a", "https://eplus.jp/b", "https://eplus.jp/moved",
+    ]
+    assert report.new_proposals == 2
+    assert report.changed_proposals == 1
+    assert report.skipped_held == 0
+    rows = await _proposals(session)
+    assert len(rows) == 3
 
 
 async def test_an_unknown_kind_is_stored_as_other_and_the_reason_reported(session):
@@ -507,8 +764,11 @@ PAGE_TWO_CLOSES = (
 )
 
 # One reply, two rounds, ONE dedupe key: same label, same opening time,
-# different closing time. `new_proposals` cannot filter this -- it diffs
-# against the rounds the concert HOLDS, and neither of these is held.
+# different closing time. `classify_proposals` cannot filter this -- it diffs
+# against the rounds the concert HOLDS, and it puts each of these in exactly
+# one bucket, so the two tests below feed this same reply to a concert holding
+# nothing (both readings `fresh`) and to one holding the round (both
+# `changed`), which is the only way to reach BOTH `_fold_duplicate_keys` calls.
 DOUBLED_REPLY = """\
 rounds:
   - label: 1次先行抽選
@@ -555,6 +815,41 @@ async def test_two_readings_of_one_round_in_one_reply_keep_the_first(session):
     assert rows[0].closes_at_utc == CLOSES_UTC
     assert "2026年1月10日" in rows[0].evidence_yaml
     # And the discard is named, because this module names every discard.
+    assert any("second reading of the same round" in r for r in report.rejections)
+
+
+async def test_two_readings_of_one_CHANGED_round_keep_the_first_too(session):
+    """The SECOND fold call, on the `changed` bucket -- and the reason this
+    test exists is that the one above cannot reach it.
+
+    `classify_proposals` puts a proposed round in exactly one bucket, and the
+    test above seeds a concert holding NO round at all, so both its readings
+    land in `fresh` and the `changed` fold beside it is never exercised.
+    Deleting `changed = _fold_duplicate_keys(changed, ...)` from `_poll_one`
+    left all 22 tests in this file green.
+
+    The concert here HOLDS the round -- same label, same opening minute, no
+    closing time -- so both readings are `changed`, and unfolded they do the
+    same damage they do in `fresh`: the second SELECTs the row the first just
+    flushed and overwrites its closing time and its evidence, with the tally
+    reading two.
+    """
+    await _approve(session)
+    await _concert(session, "doubled-changed", rounds=[("1次先行抽選", OPENS_UTC)])
+
+    async def fetch(url):
+        return PAGE_TWO_CLOSES
+
+    report = await run_round_poll(
+        session, NOW, fetcher=fetch, chat=fake_chat(DOUBLED_REPLY)
+    )
+
+    rows = await _proposals(session)
+    assert len(rows) == 1
+    assert (report.changed_proposals, report.new_proposals) == (1, 0)
+    # The FIRST reading owns the row, exactly as in the `fresh` bucket.
+    assert rows[0].closes_at_utc == CLOSES_UTC
+    assert "2026年1月10日" in rows[0].evidence_yaml
     assert any("second reading of the same round" in r for r in report.rejections)
 
 

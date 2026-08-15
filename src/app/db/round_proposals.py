@@ -19,23 +19,30 @@ Three rules this module exists to keep, each silent when broken:
   `ladder_rechecked_at_utc`, which is the OWNER's and orders
   /admin/quiet-ladders. See `record_ladder_polled`.
 
-Phase 1 writes no `dismissed_at` and no `applied_at`: the proposals page ships
-read-only and applying is phase 2. `dismissed_keys_for` and
-`pending_proposals` read both columns from the start anyway, so the pass and
-the page are already correct on the day a button appears -- a filter added
-after the fact is a filter every existing reader is missing.
+Phase 1 wrote neither `dismissed_at` nor `applied_at`: the proposals page
+shipped read-only. `dismissed_keys_for` and `pending_proposals` read both
+columns from the start anyway, so the pass and the page were already correct
+on the day a button appeared -- a filter added after the fact is a filter
+every existing reader is missing. Phase 2's `mark_proposal_applied` /
+`mark_proposal_dismissed` are the two writers of those columns, and the only
+ones: both are pure stamps, and neither touches a `Round` -- creating the
+round is the route's job (`web/routes/quiet_ladders.py`), because a `Round`
+written anywhere without the `sync_concert` beside it is invariant 2's silent
+failure, and this module has no business owning half of that pair.
 """
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.config import settings
 from app.db.core import ensure_user
-from app.db.models import Concert, Notification, RoundPollState, RoundProposal, User
-from app.domain.round_proposals import dedupe_key
+from app.db.models import Concert, Notification, Round, RoundPollState, RoundProposal, User
+from app.domain.round_proposals import anchors_differ, dedupe_key
 from app.domain.types import RoundKind
 
 # One poll a day, the discovery sweep's cadence and for the same reason: the
@@ -57,6 +64,9 @@ async def upsert_proposal(
     kind: RoundKind,
     opens_at_utc: datetime | None,
     closes_at_utc: datetime | None,
+    results_at_utc: datetime | None,
+    payment_deadline_at_utc: datetime | None,
+    applies_to_labels: list[str],
     evidence_yaml: str,
     source_url: str,
     now: datetime,
@@ -68,6 +78,21 @@ async def upsert_proposal(
     lie if a daily re-poll refreshed it. `dismissed_at`/`applied_at` are
     likewise never cleared here: a re-sighting of a round the owner already
     refused is the normal case, not a reason to un-refuse it.
+
+    THAT RULE IS WHY THE FOUR ANCHORS AND THE LEG LIST ARE WRITTEN BELOW THE
+    INSERT BRANCH RATHER THAN INSIDE IT. Only `opens_at_utc` is part of the
+    key; a page that corrects its 当落発表 date, or names a second leg, keeps
+    the same `dedupe_key` and must reach the row that already exists. Setting
+    the newer fields only on INSERT would mean the first reading of a proposal
+    is the only one that ever counts -- and it would look identical to a page
+    that never changed.
+
+    `results_at_utc`, `payment_deadline_at_utc` and `applies_to_labels` are
+    REQUIRED keyword arguments with no defaults, deliberately, and for
+    `concert_to_yaml`'s reason: a field added after the writer shipped and
+    quietly defaulting to empty is exactly how the three of them were parsed,
+    grounded against the page and then dropped for a whole phase. There is one
+    production caller.
 
     The key comes from `dedupe_key` and only from `dedupe_key` -- see the
     module docstring for what a second derivation costs.
@@ -90,6 +115,23 @@ async def upsert_proposal(
     proposal.kind = kind
     proposal.opens_at_utc = opens_at_utc
     proposal.closes_at_utc = closes_at_utc
+    proposal.results_at_utc = results_at_utc
+    proposal.payment_deadline_at_utc = payment_deadline_at_utc
+    # A NEW list of STRINGS every time, never the caller's own object.
+    #
+    # New, because the ORM tracks a JSON column by identity: mutating a list
+    # handed in here would leave a change SQLAlchemy never flushes.
+    #
+    # Strings, because this is the WRITER and the column is JSON. A leg label
+    # is free editor text, and a date-shaped one (`2026-01-05`) comes back from
+    # a model's unquoted YAML as a `datetime.date` -- which `json.dumps`
+    # refuses, so the flush raises `StatementError` and, in the poll, abandons
+    # the whole run rather than one proposal. The poll's `_applies_to_labels`
+    # coerces too, and that duplication is deliberate: this guard is the one
+    # nothing can route around. Phase 2's apply path adds more writers, and a
+    # type rule that lives at one call site is a type rule the next call site
+    # does not have.
+    proposal.applies_to_labels = [str(leg).strip() for leg in applies_to_labels]
     proposal.evidence_yaml = evidence_yaml
     proposal.source_url = source_url
     await session.flush()
@@ -113,6 +155,142 @@ async def pending_proposals(session: AsyncSession) -> list[RoundProposal]:
     )).scalars().all())
 
 
+async def pending_proposals_for(session: AsyncSession, concert_id: int) -> list[RoundProposal]:
+    """`pending_proposals`, narrowed to ONE concert -- what the draft page
+    (`GET /admin/quiet-ladders/proposals/{event_id}`) reads. Same
+    both-timestamps-NULL definition of pending and the same oldest-first
+    order, for the same reason `pending_proposals` gives: the longest-waiting
+    proposal on THIS concert is still the one worth reviewing first.
+    """
+    return list((await session.execute(
+        select(RoundProposal)
+        .where(
+            RoundProposal.concert_id == concert_id,
+            RoundProposal.dismissed_at.is_(None),
+            RoundProposal.applied_at.is_(None),
+        )
+        .order_by(RoundProposal.first_seen_at, RoundProposal.id)
+    )).scalars().all())
+
+
+async def mark_proposal_applied(
+    session: AsyncSession, proposal_id: int, now: datetime
+) -> bool:
+    """Stamp "a human turned this into a real round". Returns False if gone.
+
+    A STAMP AND NOTHING ELSE, and the ordering rule that goes with it lives at
+    the call site: the route creates the `Round`, calls this, then calls
+    `sync_concert`. Without the stamp the proposal stays pending, reappears on
+    the draft page forever, and the next press puts a SECOND copy of the same
+    round on a concert people already hold reminders for.
+
+    `applied_at`, never `dismissed_at`: the two columns answer different
+    questions and `dismissed_keys_for` reads only the second, deliberately --
+    an applied proposal needs no skip list, because the round it produced is
+    what filters it out on the held side next poll (see that function).
+
+    Silent on a row that no longer exists, like `record_ladder_polled`: a
+    concert deleted between the page render and the button press CASCADEs its
+    proposals away, and that is a stale page, not an error worth a traceback.
+    The caller is the one holding a 404's worth of context.
+    """
+    proposal = await session.get(RoundProposal, proposal_id)
+    if proposal is None:
+        return False
+    proposal.applied_at = now
+    await session.flush()
+    return True
+
+
+async def mark_proposal_dismissed(
+    session: AsyncSession, proposal_id: int, now: datetime
+) -> bool:
+    """Stamp "no, never propose this again". Returns False if gone.
+
+    The one that has to STICK. The poll runs daily over the same quiet
+    concerts, so a dismissal that did not persist would come back tomorrow and
+    every day after until the queue is noise nobody reads -- which is why
+    `dismissed_keys_for` exists and why `upsert_proposal` never clears these
+    columns on a re-sighting.
+
+    Writes no `Round` and calls no `sync_concert`, on purpose: there is
+    nothing to schedule. A dismissal that quietly fell through to the apply
+    path would put the model's unreviewed reading straight into the catalogue,
+    which is the exact opposite of what the operator pressed.
+    """
+    proposal = await session.get(RoundProposal, proposal_id)
+    if proposal is None:
+        return False
+    proposal.dismissed_at = now
+    await session.flush()
+    return True
+
+
+def held_rounds_by_key(rounds: Sequence[Round]) -> dict[str, Round]:
+    """A concert's OWN rounds, keyed the same way a proposal already is.
+
+    `Round` already carries every attribute `domain.round_proposals.HeldRound`
+    copies (`label`, `opens_at_utc`, `closes_at_utc`, `results_at_utc`,
+    `payment_deadline_at_utc`) -- keyed straight off the ORM row through
+    `dedupe_key` rather than through a `HeldRound` wrapper, which would only be
+    a second object naming the same five attributes for no reader here.
+    """
+    return {dedupe_key(r.label, r.opens_at_utc): r for r in rounds}
+
+
+def classify_stored_proposal(proposal: RoundProposal, held_by_key: dict[str, Round]) -> str:
+    """"new", "changed" or "resolved" for one PENDING `RoundProposal` against
+    the concert's CURRENT rounds.
+
+    Derived HERE, on every render, and never stored on the row: a proposal
+    whose round is later fixed by hand (an editor retypes the closing date the
+    proposal already named) simply stops being reported as changed the next
+    time this runs, with no second write anywhere to keep in step -- the same
+    "resolves itself" property the review page's docstring promises.
+
+    The DIFFERS check is `domain.round_proposals.anchors_differ`, the SAME
+    predicate `_differs` calls -- not a second copy of "these three fields,
+    opens excluded". A `RoundProposal` row already stores its three anchors as
+    typed, aware UTC columns (`upsert_proposal` ran the model's JST text
+    through `proposed_stamp_utc` once, at write time), so they are handed to
+    `anchors_differ` directly. Note for anyone tempted to justify that by
+    "avoiding a lossy round trip": routing them back through JST text and
+    re-parsing would NOT actually lose anything here -- `proposed_stamp_utc`
+    only ever produces `:00` seconds/microseconds, and JST is a fixed +09:00
+    offset with no DST, so UTC -> JST -> "%Y-%m-%d %H:%M" text -> UTC is exact
+    for every value this column can hold. The real reason this function does
+    not call `_differs` directly is a SHAPE mismatch, not a precision one:
+    `_differs` wants a `ProposedRound` keyed by
+    `apply_closes_jst`/`results_jst`/`payment_deadline_jst`, and wrapping a
+    `RoundProposal` row in one just to satisfy that shape would be more
+    machinery than the three-line comparison it exists to reach -- which is
+    exactly why that comparison was pulled out into `anchors_differ` instead,
+    so both shapes can call the SAME code without either constructing the
+    other's wrapper.
+
+    The key is `proposal.dedupe_key`, the column `upsert_proposal` wrote
+    through `domain.round_proposals.dedupe_key` at insert time -- read back
+    rather than recomputed, so this always matches on the exact key the writer
+    minted, never a second derivation of it. `held_by_key` holds `Round` ORM
+    rows, not `HeldRound` wrappers (see `held_rounds_by_key`'s own docstring
+    for why); `anchors_differ` only ever reads the three attributes both types
+    name identically, so handing it a `Round` where it is typed for a
+    `HeldRound` is the same duck-typing `held_rounds_by_key` already relies on
+    to skip constructing one.
+    """
+    held = held_by_key.get(proposal.dedupe_key)
+    if held is None:
+        return "new"
+    if anchors_differ(
+        held,
+        proposal.closes_at_utc,
+        proposal.results_at_utc,
+        proposal.payment_deadline_at_utc,
+    ):
+        return "changed"
+    return "resolved"
+
+
 @dataclass(frozen=True)
 class ProposalGroup:
     """`pending_proposals` grouped by the concert it names, for the review
@@ -128,7 +306,18 @@ class ProposalGroup:
 
 
 async def pending_proposal_groups(session: AsyncSession) -> list[ProposalGroup]:
-    """`pending_proposals`, grouped by concert.
+    """`pending_proposals`, grouped by concert, with any proposal already
+    RESOLVED against the concert's CURRENT rounds filtered out.
+
+    Round 1 of this feature's own docs review found this filter MISSING here
+    while `_draft_row` (`web/routes/quiet_ladders.py`) already had it -- a
+    proposal an operator fixed by hand on the ordinary concert editor kept
+    showing on this page (the one the digest DM links to) with a phantom
+    pending count, and only the per-concert draft page ever resolved it.
+    `classify_stored_proposal` is the SAME derivation `_draft_row` uses --
+    never a second comparison written here -- for the reason its own
+    docstring gives: two copies of "is this still worth showing" is exactly
+    the drift `anchors_differ` was pulled out to stop.
 
     A second query rather than a join: `pending_proposals` is the worklist
     ordering every other reader shares, and re-deriving "pending" here with a
@@ -138,6 +327,20 @@ async def pending_proposal_groups(session: AsyncSession) -> list[ProposalGroup]:
     raised, the same warns-and-skips habit every reader in this package
     follows for a third party's page; the review page just shows one fewer
     row rather than 500ing.
+
+    `Concert.rounds` is EAGER-loaded here (`selectinload`), one extra query
+    for the whole batch, never per-concert and never a bare `concert.rounds`:
+    that relationship has no `lazy="raise"` guard the way `venue_tag` does,
+    so an unloaded access during async template rendering is a
+    `MissingGreenlet` 500, not a clean failure. `held_rounds_by_key` is
+    computed once per concert and cached, not once per proposal, since a
+    concert can hold several pending proposals and rebuilding the same dict
+    for each would be pure waste.
+
+    A concert whose every pending proposal resolves this way is dropped from
+    the result ENTIRELY, the same as if it had never had a proposal at all --
+    which is what lets the worklist actually empty rather than showing a
+    group with nothing left in it.
     """
     proposals = await pending_proposals(session)
     if not proposals:
@@ -146,15 +349,24 @@ async def pending_proposal_groups(session: AsyncSession) -> list[ProposalGroup]:
         c.id: c
         for c in (
             await session.execute(
-                select(Concert).where(Concert.id.in_({p.concert_id for p in proposals}))
+                select(Concert)
+                .where(Concert.id.in_({p.concert_id for p in proposals}))
+                .options(selectinload(Concert.rounds))
             )
         ).scalars().all()
     }
+    held_by_concert: dict[int, dict[str, Round]] = {}
     groups: dict[int, ProposalGroup] = {}
     order: list[int] = []
     for proposal in proposals:
         concert = concerts.get(proposal.concert_id)
         if concert is None:
+            continue
+        held_by_key = held_by_concert.get(concert.id)
+        if held_by_key is None:
+            held_by_key = held_rounds_by_key(concert.rounds)
+            held_by_concert[concert.id] = held_by_key
+        if classify_stored_proposal(proposal, held_by_key) == "resolved":
             continue
         group = groups.get(proposal.concert_id)
         if group is None:
@@ -174,8 +386,8 @@ async def dismissed_keys_for(session: AsyncSession, concert_id: int) -> set[str]
     """The keys this concert's poll must not propose again.
 
     Dismissed only -- an applied proposal needs no skip list, because applying
-    it puts a real `Round` on the concert and `new_proposals` then filters it
-    out on the held side, where the check belongs.
+    it puts a real `Round` on the concert and `classify_proposals` then
+    filters it out on the held side, where the check belongs.
     """
     return set((await session.execute(
         select(RoundProposal.dedupe_key).where(

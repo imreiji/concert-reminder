@@ -52,6 +52,14 @@ already better than the current state.
 **Phase 2 — the draft page and the per-round apply.** Reviewing a proposal
 field by field and writing the approved ones onto the live concert.
 
+> **2026-08-14: phase 2 shipped.** Design in
+> `docs/superpowers/specs/2026-08-14-round-poll-phase-2-design.md`. This
+> section is left as written 2026-08-13 -- the record should show what was
+> believed then, including the parts phase 2 changed (a moved date is
+> SURFACED, not silently discarded, which needed a third verdict this
+> document does not describe; the write path turned out creates-only, an
+> owner ruling phase 2's own document explains).
+
 The split is deliberate: phase 2 writes rounds onto concerts users already hold
 reminders for, and that is where a defect costs the most. Phase 1 writes
 nothing a user can see.

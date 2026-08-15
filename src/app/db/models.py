@@ -1181,6 +1181,24 @@ class RoundProposal(Base):
     )
     opens_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
     closes_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # The other two anchors of a round. Phase 1 stored only the two above,
+    # while the prompt asked for all four and `verify_rounds` grounded all four
+    # against the page -- so a 当落発表 and an 入金期限 were read, checked and
+    # then dropped on the floor by the writer. A proposal that cannot carry
+    # them is a proposal an operator would have to retype the interesting half
+    # of by hand.
+    results_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    payment_deadline_at_utc: Mapped[datetime | None] = mapped_column(UTCDateTime)
+    # The leg LABELS the model named, verbatim -- NOT `ConcertDay` ids, and not
+    # `Round.applies_to`'s shape. The model reads a third-party page, not this
+    # database, and the prompt asks it to copy labels out of the draft's
+    # `performances`; `verify_rounds` refuses any round naming a leg the draft
+    # lacks. So a label is the only thing that can honestly be stored here, and
+    # the review page maps labels to legs at render time -- showing one that
+    # matches nothing as unmatched rather than silently dropping it.
+    # Empty means ALL legs, exactly as `Round.applies_to` empty does; NOT NULL
+    # with a `[]` default so that convention has one spelling rather than two.
+    applies_to_labels: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
     # field -> the quoted source line, one small YAML document. BESIDE the
     # proposal, the way PendingDraft.completion_yaml sits beside its draft:
     # evidence is what a reviewer judges the claim by, not part of the claim.
