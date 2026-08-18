@@ -1179,6 +1179,20 @@ the same reason (a new per-user write) and found the same answer; the rest
 were re-read and stand as written. Full reasoning at the tail of this
 Proposed section, ahead of the older passes it now sits above.
 
+**The 2026-08-18 pass ships #23, the test-suite tooling entry, and it is the
+first entry in this file to ship with no user-visible change at all.** The
+suite now runs across all cores by default (`addopts = "-n auto"`): 3,025
+tests in 107s where a serial run measured 591s, past the 600s foreground
+ceiling that had made a full verification run something you started and
+walked away from. Nothing else moves on merit -- a change to how the suite is
+INVOKED cannot raise or lower a feature's impact, and re-reading all
+twenty-four remaining entries against it found none whose reasoning it
+touches except #6, which borrows this entry's argument that a workflow cost
+is a kind of impact; that argument is unchanged and #6 keeps its rank.
+Entries below renumber by removal only: old #24 and #25 become #23 and #24,
+and the two live pointers at old #24 (in the round poll phase 2 Shipped
+entry) were corrected in place rather than left to rot.
+
 ## Proposed (highest impact first)
 
 ### 1. Minute-level reminder offsets
@@ -2372,36 +2386,7 @@ day can safely stay quiet -- which is the whole point of the empty-digest
 design -- because something else is now watching the one signal that design
 depends on.
 
-### 23. The test suite has outgrown its tooling
-
-Impact: low-medium (no correctness or user-facing cost -- but it already
-shapes how every build in this repo gets verified, which #6 above treats as
-its own kind of impact for the same reason) - effort: medium (pytest-xdist
-parallelisation, splitting into multiple invocations, or a background-run
-convention are all real options; none has been picked). Raised: 2026-08-13,
-during round poll's own task-6 documentation pass, which needed to run the
-suite and could not.
-
-`pytest -q --collect-only` counts 3,019 tests as of this build (2026-08-14,
-round 1 of its own documentation pass -- the count drifts by the pass itself,
-since round 1 added one test to `test_admin_round_proposals.py`).
-A full `uv run pytest -q` run measures at roughly 650 seconds against this
-harness's own foreground command ceiling of 600 seconds (600,000ms) -- so a
-full verification pass can no longer complete inside a single foreground
-Bash call, and every subagent that needs one has to background it and wait
-for a completion notification instead of blocking on the result directly.
-This is not hypothetical friction the way #20's MCP wrapper is, where "nothing
-so far says" the friction it worries about is real -- it is a
-constraint every task in this build already worked around, this one included
-(task 6's own instructions say plainly: do not attempt the full suite in the
-foreground, the owner confirms it separately). Ranked below #6 on the
-distinction #6 itself draws between a LATENT production risk with one
-documented near-miss and a present-day workflow cost with a known, if
-inconvenient, workaround -- this is the latter. It will keep growing on its
-own as the suite does; nothing about fixing it needs to wait for evidence the
-way #20 does.
-
-### 24. Round poll's one remaining known gap: a doubled proposal over-counts the tally
+### 23. Round poll's one remaining known gap: a doubled proposal over-counts the tally
 
 Impact: low (`ROUND_POLL_ENABLED` still defaults off, and even switched on
 this is a digest COUNT reading one candidate too high on a specific
@@ -2450,7 +2435,7 @@ first call, in the same run), so it counts as new again. A model repeating
 itself within one reply reports "2 new proposals" for a database that gained
 one row.
 
-### 25. Round poll: an edited opening time can create a label-duplicate neither refusal catches
+### 24. Round poll: an edited opening time can create a label-duplicate neither refusal catches
 
 Impact: low today (needs a specific combination: a genuinely-new proposal, an
 admin who edits its opening time on the draft page, AND a concert that
@@ -2496,7 +2481,7 @@ judgement call for the owner, not a predicate this pure diff can make on its
 own.
 
 **Revision-pass note (2026-08-14, round poll phase 2 -- full pass required by
-CLAUDE.md's WISHLIST rule after every shipped feature):** old-#2's LARGE
+CLAUDE.md's WISHLIST rule after every shipped feature):** **[Numbers below are as written on that date. The 2026-08-18 pass shipped the test-tooling entry that was #23, so what these paragraphs call #24 and #25 are #23 and #24 today.]** old-#2's LARGE
 shape moves to Shipped in full (below, both phases); its small shape is
 re-ranked on its own merits per this pass's own brief rather than left
 inheriting old-#2's rank, landing at #4 (low-medium impact, small effort,
@@ -2530,7 +2515,7 @@ rather than left implicit, per the instruction that a revision pass leaving
 no trace is indistinguishable from one that never happened.
 
 **Revision-pass note (2026-08-13, round poll phase 1 -- full pass required by
-CLAUDE.md's WISHLIST rule after every shipped feature):** one entry updated
+CLAUDE.md's WISHLIST rule after every shipped feature):** **[Numbers below are as written on that date. The 2026-08-18 pass shipped the test-tooling entry that was #23, so what these paragraphs call #24 and #25 are #23 and #24 today.]** one entry updated
 in place (#2, above -- NOT moved to Shipped, since phase 2 of the large shape
 and the small shape both remain open; old #2 -- round poll's large shape
 shipped in full 2026-08-14, its small shape stands alone as #4 today, and #2
@@ -2788,6 +2773,60 @@ performer chips - see its Shipped entry below.)
 
 ## Shipped
 
+### The suite runs in parallel by default (2026-08-18)
+
+Was #23. Raised 2026-08-13 during round poll's own documentation pass, which
+needed a full verification run and could not have one.
+
+**The measurement, back-to-back on one 16-core box** (this machine's absolute
+timings drift >50% across a session, so figures from different sessions are
+not comparable, and all four below were taken in one run):
+
+    serial   591s        -n 4   170s        -n 8   114s        -n auto  100s
+
+All 3,023 tests passed at every worker count on the first attempt. The suite
+was already parallel-safe and nobody had planned for that: the shared `db`
+fixture gives one in-memory database per test, every scratch file in `tests/`
+is on `tmp_path`, and nothing anywhere does `chdir` or writes `os.environ`.
+The fix is therefore one line -- `addopts = "-n auto"` in `pyproject.toml`,
+with `pytest-xdist` beside it in the dev group -- and the entry's real
+content is where that line goes and why.
+
+**Why a default and not a documented command.** 591s is past the 600s
+foreground ceiling of the agent harness that runs verification here, so a
+serial run does not fail: it is silently BACKGROUNDED, and stops being
+something anyone waits for. The convention "run the suite in the foreground
+with an explicit timeout" was written down and re-confirmed three separate
+times over three weeks and went on being missed each time, because prose does
+not survive habit. A default cannot be missed. With it in place the worst
+remaining mistake inverts: a targeted run that forgets `-n0` pays ~5s of
+worker startup (3.3s -> 10.3s on one file), which is a nuisance, where the
+mistake it replaces was a whole verification pass quietly not happening.
+
+**Two mechanisms were tried first and are recorded so nobody tries them
+again.** A conditional injection -- parallel for a bare invocation, serial
+for a single file -- needs `pytest_load_initial_conftests` or
+`pytest_cmdline_main`, and BOTH were measured doing nothing from a conftest
+(probed at rootdir and under `testpaths`, neither fires): they are initial
+hooks, delivered only to real plugins. Shipping a real plugin would mean a
+`pytest11` entry point in the installed distribution, i.e. test tooling
+inside the production wheel, which is a worse trade than 5 seconds.
+
+**What it asks of every test written from now on**, recorded in CLAUDE.md's
+testing conventions: no dependence on execution order or on another test's
+leftovers, and scratch files under `tmp_path`. Nothing enforces this, and the
+failure mode is an intermittent one on whichever worker draws the test.
+
+**No README line, deliberately.** That list is what a USER can now do, and
+this changes nothing a user sees. Noted here rather than left silent, since
+CLAUDE.md's ritual treats a missing README line as the default failure and
+this is the rare case where its absence is the correct answer.
+
+**It also retires a standing rule**: implementer subagents were barred from
+running the full suite (the controller ran it between tasks and they gated on
+targeted files). A 107s run fits a foreground call with room to spare, so
+they can gate on it themselves again.
+
 ### Round poll, phase 1 of 2 (2026-08-13)
 
 Branch `round-poll`, six tasks, spec
@@ -2917,12 +2956,13 @@ identical rounds on one concert with `sync_concert` dutifully arming
 reminders for both: this feature's own failure mode, reached through its own
 happy path.
 
-Two of round poll phase 1's own known gaps (WISHLIST #24, filed 2026-08-13)
+Two of round poll phase 1's own known gaps (WISHLIST #23 above -- filed as
+#24, renumbered 2026-08-18 when the test-tooling entry shipped)
 close with this build: a round whose closing time alone moved is now
 surfaced rather than dropped, and a proposal whose round is later added by
 hand now resolves itself for the same render-time-derivation reason above.
 The third (a doubled proposal in one LLM reply over-counting the digest
-tally) is unrelated to phase 2's scope and remains open, in #24 above.
+tally) is unrelated to phase 2's scope and remains open, in #23 above.
 `ROUND_POLL_ENABLED` still defaults off; nothing in this build changes that.
 
 ### Following is due a rework: the four-phase build (2026-08-13)
