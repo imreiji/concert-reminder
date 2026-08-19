@@ -19,6 +19,7 @@ from app.db.models import ReminderRule
 from app.db.service import ensure_user, sync_rule
 from app.db.session import get_session
 from app.domain.types import Anchor, Channel
+from app.offsets import parse_hhmm
 from app.web.auth import SessionUser, require_user
 from app.web.routes.concerts import get_concert, get_concert_by_event_id, render_rules_fragment
 
@@ -32,13 +33,19 @@ async def add_rule(
     user: SessionUser = Depends(require_user),
     session: AsyncSession = Depends(get_session),
     anchor: Anchor = Form(...),
-    days_before: int = Form(..., ge=0, le=60),
+    days: int = Form(0, ge=0, le=60),
+    time: str = Form("0:00"),
 ):
     concert = await get_concert_by_event_id(session, event_id)
     await ensure_user(session, user.id, user.username)
+    try:
+        hours, minutes = parse_hhmm(time)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"bad time: {e}") from e
     rule = ReminderRule(
         user_id=user.id, concert_id=concert.id, anchor=anchor,
-        offset_days=-days_before, channel=Channel.DM,
+        offset_days=-days, offset_hours=-hours, offset_minutes=-minutes,
+        channel=Channel.DM,
     )
     session.add(rule)
     await session.flush()

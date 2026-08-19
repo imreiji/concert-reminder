@@ -219,7 +219,7 @@ def test_editing_round_over_http_reschedules_queue(client):
 
     login_as(client, EDITOR_ID, "reiji")
     create_with_round(client, closes_at="2099-06-25T23:59")
-    client.post("/concerts/c/rules", data={"anchor": "closes", "days_before": 3})
+    client.post("/concerts/c/rules", data={"anchor": "closes", "days": 3})
 
     async def fire_at():
         async with client.db() as s:
@@ -333,7 +333,7 @@ def test_deleting_rule_removes_queue_rows(client):
 
     login_as(client, EDITOR_ID, "reiji")
     create_with_round(client)
-    client.post("/concerts/c/rules", data={"anchor": "closes", "days_before": 3})
+    client.post("/concerts/c/rules", data={"anchor": "closes", "days": 3})
     client.post("/rules/1/delete")
 
     async def count():
@@ -346,7 +346,7 @@ def test_deleting_rule_removes_queue_rows(client):
 def test_cannot_delete_someone_elses_rule(client):
     login_as(client, EDITOR_ID, "reiji")
     create_with_round(client)
-    client.post("/concerts/c/rules", data={"anchor": "closes", "days_before": 3})
+    client.post("/concerts/c/rules", data={"anchor": "closes", "days": 3})
 
     login_as(client, VIEWER_ID, "viewer")  # switch identity in the same client
     r = client.post("/rules/1/delete")
@@ -441,7 +441,7 @@ def test_delete_concert_cascades_everything(client):
 
     login_as(client, EDITOR_ID, "reiji")
     create_with_round(client)
-    client.post("/concerts/c/rules", data={"anchor": "closes", "days_before": 3})
+    client.post("/concerts/c/rules", data={"anchor": "closes", "days": 3})
     client.post("/concerts/c/delete")
 
     async def counts():
@@ -1440,7 +1440,7 @@ async def test_cancelling_the_only_leg_clears_its_reminders_and_notifies(client)
             "day_doors_at": [""],
         },
     )
-    client.post("/concerts/c/rules", data={"anchor": "event_start", "days_before": 7})
+    client.post("/concerts/c/rules", data={"anchor": "event_start", "days": 7})
     async with client.db() as s:
         assert len((await s.execute(select(ReminderQueue))).scalars().all()) == 1
         day_id = (await s.execute(select(ConcertDay))).scalar_one().id

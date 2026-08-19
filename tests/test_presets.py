@@ -916,7 +916,7 @@ async def test_snooze_rearms_with_deadline_cap(client):
             "round_label_zh": ["R1"], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
-    client.post("/concerts/c/rules", data={"anchor": "closes", "days_before": 3})
+    client.post("/concerts/c/rules", data={"anchor": "closes", "days": 3})
 
     async with client.db() as s:
         (row,) = await _all(client.db, ReminderQueue)
@@ -981,7 +981,7 @@ async def test_snooze_reminder_accepts_custom_day_count(client):
             "round_label_zh": ["R1"], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
-    client.post("/concerts/c2/rules", data={"anchor": "closes", "days_before": 3})
+    client.post("/concerts/c2/rules", data={"anchor": "closes", "days": 3})
 
     async with client.db() as s:
         (row,) = await _all(client.db, ReminderQueue)
@@ -1008,7 +1008,7 @@ async def test_snooze_reminder_default_days_matches_existing_behavior(client):
             "round_label_zh": ["R1"], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
-    client.post("/concerts/c3/rules", data={"anchor": "closes", "days_before": 3})
+    client.post("/concerts/c3/rules", data={"anchor": "closes", "days": 3})
 
     async with client.db() as s:
         (row,) = await _all(client.db, ReminderQueue)
