@@ -11,7 +11,8 @@ and writes the results into reminder_queue.
 Semantics:
   * offset_days < 0  -> before the anchor   (-3 = three days before)
   * offset_days > 0  -> after the anchor    (+1 = one day after, e.g. results recap)
-  * offset_days = 0  -> at the anchor moment (plus offset_hours, if any)
+  * offset_days = 0  -> at the anchor moment (plus offset_hours/offset_minutes, if any)
+  * All three offsets carry the SAME sign; direction is not stored separately.
   * A rule scoped to one round plans only that round.
   * A rule scoped to a concert expands to all its rounds (OPENS/CLOSES/
     RESULTS/PAYMENT) or all its days (EVENT_START).
@@ -49,6 +50,7 @@ class RuleInfo:
     anchor: Anchor
     offset_days: int
     offset_hours: int = 0
+    offset_minutes: int = 0
     round_id: int | None = None    # set -> rule targets one specific round
     concert_id: int | None = None  # set -> rule targets a whole concert
 
@@ -68,8 +70,8 @@ class PlannedReminder:
 # ── The math ─────────────────────────────────────────────────────────────
 
 
-def offset_delta(offset_days: int, offset_hours: int) -> timedelta:
-    return timedelta(days=offset_days, hours=offset_hours)
+def offset_delta(offset_days: int, offset_hours: int, offset_minutes: int = 0) -> timedelta:
+    return timedelta(days=offset_days, hours=offset_hours, minutes=offset_minutes)
 
 
 # The one place an Anchor maps to a Round field. due_reminders() and
@@ -101,7 +103,7 @@ def plan_for_rule(
     Callers re-run this after any round/day edit; the DB layer's dedupe
     index turns re-planning into upserts instead of duplicates.
     """
-    delta = offset_delta(rule.offset_days, rule.offset_hours)
+    delta = offset_delta(rule.offset_days, rule.offset_hours, rule.offset_minutes)
     planned: list[PlannedReminder] = []
 
     if rule.anchor is Anchor.EVENT_START:

@@ -170,6 +170,7 @@ def _rule_info(r: ReminderRule) -> RuleInfo:
         anchor=r.anchor,
         offset_days=r.offset_days,
         offset_hours=r.offset_hours,
+        offset_minutes=r.offset_minutes,
         round_id=r.round_id,
         concert_id=r.concert_id,
     )

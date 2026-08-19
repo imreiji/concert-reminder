@@ -163,3 +163,50 @@ def test_plan_for_rules_batches_and_is_deterministic():
     b = plan_for_rules(rules, ROUNDS, DAYS, NOW)
     assert a == b  # same inputs, same output — re-planning must be safe
     assert len(a) == 6  # 4 round closes + 2 day starts
+
+
+# ── Minute offsets ───────────────────────────────────────────────────────
+
+
+def test_a_minute_offset_moves_the_fire_time_by_exactly_that_much():
+    """The mutation this must not survive: offset_delta ignoring its third argument."""
+    rule = RuleInfo(
+        id=1, anchor=Anchor.OPENS, offset_days=0, offset_hours=0,
+        offset_minutes=-5, concert_id=1,
+    )
+    round_ = RoundInfo(
+        id=7,
+        opens_at_utc=datetime(2026, 9, 1, 3, 0, tzinfo=UTC),
+        closes_at_utc=None,
+    )
+    planned = plan_for_rule(rule, [round_], [], datetime(2026, 8, 1, tzinfo=UTC))
+
+    assert [p.fire_at_utc for p in planned] == [datetime(2026, 9, 1, 2, 55, tzinfo=UTC)]
+
+
+def test_days_hours_and_minutes_compose():
+    rule = RuleInfo(
+        id=1, anchor=Anchor.CLOSES, offset_days=-1, offset_hours=-2,
+        offset_minutes=-30, concert_id=1,
+    )
+    round_ = RoundInfo(
+        id=7, opens_at_utc=None,
+        closes_at_utc=datetime(2026, 9, 10, 12, 0, tzinfo=UTC),
+    )
+    planned = plan_for_rule(rule, [round_], [], datetime(2026, 8, 1, tzinfo=UTC))
+
+    assert planned[0].fire_at_utc == datetime(2026, 9, 9, 9, 30, tzinfo=UTC)
+
+
+def test_a_positive_minute_offset_fires_after_the_anchor():
+    rule = RuleInfo(
+        id=1, anchor=Anchor.RESULTS, offset_days=0, offset_hours=0,
+        offset_minutes=15, concert_id=1,
+    )
+    round_ = RoundInfo(
+        id=7, opens_at_utc=None, closes_at_utc=None,
+        results_at_utc=datetime(2026, 9, 20, 6, 0, tzinfo=UTC),
+    )
+    planned = plan_for_rule(rule, [round_], [], datetime(2026, 8, 1, tzinfo=UTC))
+
+    assert planned[0].fire_at_utc == datetime(2026, 9, 20, 6, 15, tzinfo=UTC)

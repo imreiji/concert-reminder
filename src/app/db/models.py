@@ -635,6 +635,7 @@ class ReminderRule(Base):
     )
     offset_days: Mapped[int] = mapped_column(default=-1)  # negative = before
     offset_hours: Mapped[int] = mapped_column(default=0)
+    offset_minutes: Mapped[int] = mapped_column(default=0, server_default="0")
     channel: Mapped[Channel] = mapped_column(
         Enum(Channel, values_callable=lambda e: [m.value for m in e]), default=Channel.DM
     )
@@ -677,6 +678,7 @@ class PresetItem(Base):
     )
     offset_days: Mapped[int] = mapped_column(default=-3)
     offset_hours: Mapped[int] = mapped_column(default=0)
+    offset_minutes: Mapped[int] = mapped_column(default=0, server_default="0")
 
 
 class TagSubscription(Base):
