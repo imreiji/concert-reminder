@@ -162,7 +162,7 @@ class Reminders(commands.Cog):
             await sync_rule(session, rule)
             await session.commit()
 
-        when = describe_offset(-days_before, -(minutes_before // 60), -(minutes_before % 60))
+        when = describe_offset(rule.offset_days, rule.offset_hours, rule.offset_minutes)
         await interaction.response.send_message(
             _("Done — I'll DM you {when} each **{anchor}** for **{title}**.").format(
                 when=when, anchor=anchor.name.removeprefix("before "), title=target.title

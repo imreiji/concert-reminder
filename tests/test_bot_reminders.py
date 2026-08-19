@@ -238,6 +238,38 @@ async def test_remindme_stores_a_sub_hour_offset(db):
     assert "30 minutes before" in interaction.response.sent["args"][0]
 
 
+async def test_remindme_carries_minutes_over_into_hours(db):
+    """/remindme days_before=1, minutes_before=90 -> (-1, -1, -30): the >=60
+    carry-over must actually run through the floor-division/modulo storage
+    line, not just be exercised at 30 minutes where `90 // 60` and `90 % 60`
+    are indistinguishable from a mutant that drops the carry entirely.
+
+    Kills: `-(minutes_before // 60)` mutated to `(minutes_before // 60)`
+    (wrong sign -> offset_hours=1, not -1) or to a constant `0`
+    (mutant drops the carry -> offset_hours=0, offset_minutes stays -90
+    instead of decomposing) -- test_remindme_stores_a_sub_hour_offset alone
+    can't catch either, since 30 // 60 == 0 either way."""
+    interaction = FakeInteraction(42)
+    concert_id = await _seed_one_concert(db)
+    cog = reminders_cog.Reminders(bot=None)
+
+    await reminders_cog.Reminders.remindme.callback(
+        cog,
+        interaction,
+        concert=concert_id,
+        anchor=app_commands.Choice(
+            name="before it closes (deadlines)", value=Anchor.CLOSES.value
+        ),
+        days_before=1,
+        minutes_before=90,
+    )
+
+    async with db() as s:
+        rule = (await s.execute(select(ReminderRule))).scalar_one()
+    assert (rule.offset_days, rule.offset_hours, rule.offset_minutes) == (-1, -1, -30)
+    assert "1 day 1 hour before" in interaction.response.sent["args"][0]
+
+
 async def test_myreminders_describes_an_hours_rule_as_hours(db):
     """The same misreport the concert page had: abs(offset_days) alone printed
     "same-day" for every sub-day rule. Pinned first with an HOURS-only rule
