@@ -9,12 +9,13 @@ a real in-memory async SQLite (same fixture shape test_service.py uses).
 from datetime import UTC, datetime, timedelta
 
 import pytest_asyncio
-from sqlalchemy import event
+from discord import app_commands
+from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from app.bot.cogs import reminders as reminders_cog
-from app.db.models import Base, Concert, Round
+from app.db.models import Base, Concert, ReminderRule, Round
 from app.db.service import (
     due_reminders,
     ensure_user,
@@ -167,8 +168,6 @@ async def test_due_reminders_populates_user_language(db):
         )
         s.add(round_)
         await s.flush()
-        from app.db.models import ReminderRule
-
         rule = ReminderRule(user_id=42, round_id=round_.id, anchor=Anchor.CLOSES, offset_days=-3)
         s.add(rule)
         await s.flush()
@@ -203,3 +202,95 @@ async def test_mydeadlines_respects_count_and_clamps_range(db):
     await call_mydeadlines(interaction, count=2)
     embed = interaction.response.sent["kwargs"]["embed"]
     assert embed.description.count("**C**") == 2  # capped at count, not all 3
+
+
+async def _seed_one_concert(db) -> int:
+    async with db() as s:
+        await ensure_user(s, 42, "reiji")
+        concert = Concert(title="Hasunosora 5th", event_id="hasu-5th-remindme", created_by=42)
+        s.add(concert)
+        await s.flush()
+        concert_id = concert.id
+        await s.commit()
+    return concert_id
+
+
+async def test_remindme_stores_a_sub_hour_offset(db):
+    """/remindme 0 days, 30 minutes -> (0, 0, -30), decomposed on the way in."""
+    interaction = FakeInteraction(42)
+    concert_id = await _seed_one_concert(db)
+    cog = reminders_cog.Reminders(bot=None)
+
+    await reminders_cog.Reminders.remindme.callback(
+        cog,
+        interaction,
+        concert=concert_id,
+        anchor=app_commands.Choice(
+            name="before it closes (deadlines)", value=Anchor.CLOSES.value
+        ),
+        days_before=0,
+        minutes_before=30,
+    )
+
+    async with db() as s:
+        rule = (await s.execute(select(ReminderRule))).scalar_one()
+    assert (rule.offset_days, rule.offset_hours, rule.offset_minutes) == (0, 0, -30)
+    assert "30 minutes before" in interaction.response.sent["args"][0]
+
+
+async def test_myreminders_describes_an_hours_rule_as_hours(db):
+    """The same misreport the concert page had: abs(offset_days) alone printed
+    "same-day" for every sub-day rule. Pinned first with an HOURS-only rule
+    (no minutes), since that is the case already broken in production."""
+    interaction = FakeInteraction(42)
+    async with db() as s:
+        await ensure_user(s, 42, "reiji")
+        concert = Concert(title="C", event_id="c-myreminders", created_by=42)
+        s.add(concert)
+        await s.flush()
+        s.add(
+            ReminderRule(
+                user_id=42,
+                concert_id=concert.id,
+                anchor=Anchor.CLOSES,
+                offset_days=0,
+                offset_hours=-3,
+                offset_minutes=0,
+            )
+        )
+        await s.commit()
+
+    cog = reminders_cog.Reminders(bot=None)
+    await reminders_cog.Reminders.myreminders.callback(cog, interaction)
+
+    sent = interaction.response.sent["args"][0]
+    assert "3 hours before" in sent
+    assert "same-day" not in sent
+
+
+async def test_myreminders_describes_a_minutes_rule_as_minutes(db):
+    """Minutes-only rule on top of the hours case above."""
+    interaction = FakeInteraction(42)
+    async with db() as s:
+        await ensure_user(s, 42, "reiji")
+        concert = Concert(title="C2", event_id="c2-myreminders", created_by=42)
+        s.add(concert)
+        await s.flush()
+        s.add(
+            ReminderRule(
+                user_id=42,
+                concert_id=concert.id,
+                anchor=Anchor.CLOSES,
+                offset_days=0,
+                offset_hours=0,
+                offset_minutes=-30,
+            )
+        )
+        await s.commit()
+
+    cog = reminders_cog.Reminders(bot=None)
+    await reminders_cog.Reminders.myreminders.callback(cog, interaction)
+
+    sent = interaction.response.sent["args"][0]
+    assert "30 minutes before" in sent
+    assert "same-day" not in sent
