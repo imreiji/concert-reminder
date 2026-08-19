@@ -29,6 +29,7 @@ from app.domain.sentence import split_slots
 from app.domain.timezones import fmt_day_month, fmt_dual, fmt_dual_lines, utc_to_jst
 from app.domain.types import TagKind
 from app.domain.urls import safe_next
+from app.offsets import describe_offset, format_hhmm
 from app.ops import run_checks
 from app.scheduler import heartbeat
 from app.web import auth
@@ -75,6 +76,15 @@ templates.env.globals["current_locale"] = i18n.get_locale  # {{ current_locale()
 # The board card's ladder cap. Pure (domain.board), registered here so the
 # rule has exactly one definition and _board.html can call it inline.
 templates.env.globals["visible_rungs"] = visible_rungs
+# Sub-day reminder offsets (app/offsets.py): `hhmm` re-fills the editor's
+# h:mm box with a magnitude ("0:30"), used by preferences.html's rule-editing
+# macro; `describe_offset` is the one translated phrase for a stored, signed
+# offset, used by `_rules.html` (the concert page and /myreminders) and
+# mirrored in `bot/cogs/reminders.py` for the Discord embed -- one describer
+# shared by both shells, not a copy per surface (see the offsets.py entry in
+# docs/architecture.md for why a second copy drifted before).
+templates.env.globals["hhmm"] = format_hhmm
+templates.env.globals["describe_offset"] = describe_offset
 
 
 def sentence_slots(pattern: str, slots: dict[str, Markup]) -> Markup:

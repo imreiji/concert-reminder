@@ -3,7 +3,7 @@ that no longer apply and (on a loss) auto-arms the next round for the
 same leg.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 
@@ -402,6 +402,42 @@ async def test_auto_arm_uses_default_preset_opens_offset(session):
         )
     )).scalars()
     assert rule.offset_days == -2
+
+
+async def test_auto_arm_inherits_the_default_presets_sub_hour_offset(session):
+    """A 5-minute OPENS item in the default preset must arm the next round at
+    5 minutes before it opens, not at the anchor. The mutation this must not
+    survive: the auto-arm reading offset_days/offset_hours and defaulting
+    minutes to 0."""
+    from app.db.models import PresetItem, ReminderPreset
+    from app.db.service import record_round_outcome
+
+    concert, leg_a, leg_b, round_a_only, round_both, round_general = await seed_two_legs(session)
+    round_a_only.opens_at_utc = dt(6, 10)
+    next_round = Round(
+        concert_id=concert.id, kind=RoundKind.LOTTERY_ROUND, label="A-only round 2",
+        opens_at_utc=dt(7, 1), closes_at_utc=dt(7, 15), applies_to=[leg_a.id],
+    )
+    session.add(next_round)
+    preset = ReminderPreset(user_id=42, name="fcfs", is_default=True)
+    session.add(preset)
+    await session.flush()
+    session.add(PresetItem(
+        preset_id=preset.id, anchor=Anchor.OPENS,
+        offset_days=0, offset_hours=0, offset_minutes=-5,
+    ))
+    await session.flush()
+
+    await record_round_outcome(session, 42, round_a_only.id, LotteryOutcome.LOST, NOW)
+
+    (armed,) = (await session.execute(
+        select(ReminderRule).where(
+            ReminderRule.round_id == next_round.id, ReminderRule.anchor == Anchor.OPENS,
+        )
+    )).scalars()
+    assert (armed.offset_days, armed.offset_hours, armed.offset_minutes) == (0, 0, -5)
+    (queued,) = await queue_rows_for(session, armed.id)
+    assert queued.fire_at_utc == next_round.opens_at_utc - timedelta(minutes=5)
 
 
 async def test_auto_arm_does_not_duplicate_existing_rule(session):

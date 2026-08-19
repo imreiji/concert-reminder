@@ -16,12 +16,14 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.config import settings
 from app.db.models import (
     Concert,
     ConcertDay,
     ConcertTag,
+    PresetItem,
     ReminderPreset,
     Round,
     Tag,
@@ -29,7 +31,7 @@ from app.db.models import (
     User,
 )
 from app.db.session import get_session
-from app.domain.types import RoundKind, TagKind
+from app.domain.types import Anchor, RoundKind, TagKind
 from app.web import auth
 from app.web.app import create_app
 
@@ -324,14 +326,30 @@ async def test_reminder_sentence_slot_order_en(client):
     r = client.get("/preferences")
     # A preset must exist for a rule row to render; the "New preset" fold
     # always carries a blank sentence_fields even with no presets.
-    assert 'name="days"' in r.text and 'name="anchor"' in r.text
+    assert 'name="days"' in r.text and 'name="time"' in r.text and 'name="anchor"' in r.text
     assert r.text.index('name="days"') < r.text.index('name="anchor"')
     assert "each" in r.text  # the EN pattern's between-slots text
 
 
 async def test_reminder_sentence_slot_order_ja(client):
-    """Under ja the pattern reorders the slots -- the anchor select leads and
-    the day/hour selects follow -- and the translated pattern text renders."""
+    """Under ja the pattern REORDERS the slots, which is the entire reason the
+    sentence is one translatable pattern instead of four labels in a row.
+
+    The ja msgstr is 「各{anchor}の{days}日{time}{direction}に通知。」 -- the
+    anchor select LEADS, then days, then the h:mm box, then before/after, and
+    the verb closes the sentence. English is the opposite order
+    ("Remind me {days} day(s) {time} {direction} each {anchor}."), so the one
+    assertion that cannot be satisfied by accident is anchor-before-days: it is
+    false in the source string and false under any English fallback.
+
+    Mutations this survives: none of them quietly. Reverting the ja msgstr to
+    English order, dropping it (gettext falls back to the English msgid),
+    marking it fuzzy (dropped at compile, same fallback), or having
+    sentence_slots emit the slots in dict order rather than pattern order all
+    put days ahead of anchor and fail the first assertion. Emitting the ja
+    literal runs without the slots, or the slots without the literals, fails
+    the others.
+    """
     from app import i18n
 
     i18n.reset_catalog_cache()
@@ -340,11 +358,25 @@ async def test_reminder_sentence_slot_order_ja(client):
         login_as(client, USER_A, "reiji")
         client.cookies.set("lang", "ja")
         r = client.get("/preferences")
-        # ja: 各{anchor}の{days}日{hours}時間{direction}に通知。 -> anchor before days.
-        assert r.text.index('name="anchor"') < r.text.index('name="days"')
-        # Translated pattern fragments appear (proves it went through slots).
-        assert "に通知" in r.text
-        assert "日" in r.text
+        assert r.status_code == 200
+        # Scope to ONE rendered sentence: 「の」/「各」 are ordinary Japanese and
+        # occur all over the page, so a whole-page .index() would find prose
+        # rather than the pattern's own literal runs.
+        start = r.text.index('class="sentence')
+        sentence = r.text[start:r.text.index("</form>", start)]
+        anchor = sentence.index('name="anchor"')
+        days = sentence.index('name="days"')
+        time_box = sentence.index('name="time"')
+        direction = sentence.index('name="direction"')
+        # The ja order, slot by slot: anchor, days, time, direction. The first
+        # comparison is the reversal of the English order.
+        assert anchor < days < time_box < direction
+        # ...and the pattern's literal runs land between the right slots, so
+        # this is the ja sentence and not four controls with English glue.
+        assert sentence.index("各") < anchor
+        assert anchor < sentence.index("の") < days
+        assert direction < sentence.index("に通知。")
+        assert "each" not in sentence  # the EN pattern's between-slots text
     finally:
         i18n.reset_catalog_cache()
 
@@ -383,3 +415,159 @@ async def test_editors_shown_for_admin(client, monkeypatch):
     r = client.get("/preferences")
     assert r.status_code == 200
     assert "Editors" in r.text
+
+
+# ── The h:mm box (minute-offsets, Task 4) ────────────────────────────────
+
+
+async def test_a_preset_item_round_trips_a_sub_hour_offset(client):
+    """Type 0:30, store (0, 0, -30), and read it back out of the box as 0:30."""
+    login_as(client, USER_A, "reiji")
+    assert client.post("/presets", data={
+        "name": "fcfs", "anchor": "opens", "days": "0", "time": "0:30",
+        "direction": "before",
+    }).status_code == 303
+
+    async with client.db() as s:
+        item = (await s.execute(select(PresetItem))).scalar_one()
+    assert (item.offset_days, item.offset_hours, item.offset_minutes) == (0, 0, -30)
+
+    page = client.get("/preferences")
+    assert 'value="0:30"' in page.text
+
+
+def test_a_bad_time_value_is_refused_not_rounded(client):
+    """0:75 is a typo, and a reminder that silently moved to 1:15 is worse
+    than an error page."""
+    login_as(client, USER_A, "reiji")
+    r = client.post("/presets", data={
+        "name": "typo", "anchor": "opens", "days": "0", "time": "0:75",
+        "direction": "before",
+    })
+    assert r.status_code == 422
+
+
+async def test_editing_an_item_puts_the_same_sign_on_all_three_columns(client):
+    login_as(client, USER_A, "reiji")
+    client.post("/presets", data={
+        "name": "p", "anchor": "closes", "days": "3", "time": "0:00",
+        "direction": "before",
+    })
+    r = client.post("/presets/1/items/1/edit", data={
+        "anchor": "closes", "days": "1", "time": "1:15", "direction": "after",
+    })
+    assert r.status_code == 303
+
+    async with client.db() as s:
+        item = (await s.execute(select(PresetItem))).scalar_one()
+    assert (item.offset_days, item.offset_hours, item.offset_minutes) == (1, 1, 15)
+
+
+async def test_add_item_stores_a_non_zero_minutes_offset(client):
+    """POST /presets/{id}/items -- the ADD path, not create-preset or edit.
+
+    Fix round 1, Important 1: nothing previously posted a non-zero `time` to
+    this specific route, so `offset_minutes=sign * minutes` could be deleted
+    from `add_item` and the suite stayed green. Real cost: "Add a rule",
+    type 0:30 before closes, save -- and the reminder fires AT the deadline
+    instead of 30 minutes before, while the box re-renders 0:00 so it looks
+    like the user's own typo.
+
+    Mutation: drop `offset_minutes=sign * minutes` from `add_item`'s
+    PresetItem(...) call -- this fails because the stored triple would be
+    (0, 0, 0) instead of (0, 0, -30).
+    """
+    login_as(client, USER_A, "reiji")
+    client.post("/presets", data={"name": "p", "anchor": "closes", "days": "3"})
+    r = client.post("/presets/1/items", data={
+        "anchor": "opens", "days": "0", "time": "0:30", "direction": "before",
+    })
+    assert r.status_code == 303
+
+    async with client.db() as s:
+        items = (await s.execute(select(PresetItem))).scalars().all()
+    added = next(i for i in items if i.anchor is Anchor.OPENS)
+    assert (added.offset_days, added.offset_hours, added.offset_minutes) == (0, 0, -30)
+
+
+async def test_editing_an_item_to_before_negates_minutes_too(client):
+    """Fix round 1, Important 2: the existing edit-sign test only ever edits
+    to `direction=after`, so `sign == +1` there and `item.offset_minutes =
+    minutes` (dropping `sign *`) would survive it undetected. This one edits
+    to `before` with a non-zero time, so a dropped `sign *` on minutes would
+    leave it positive while days/hours went negative -- a mixed-sign row,
+    exactly the class invariant 1's sign convention exists to rule out.
+
+    Mutation: change `item.offset_minutes = sign * minutes` to
+    `item.offset_minutes = minutes` -- this fails because minutes would come
+    back +15 instead of -15 alongside days=-1, hours=-1.
+    """
+    login_as(client, USER_A, "reiji")
+    client.post("/presets", data={
+        "name": "p", "anchor": "closes", "days": "3", "time": "0:00",
+        "direction": "before",
+    })
+    r = client.post("/presets/1/items/1/edit", data={
+        "anchor": "closes", "days": "1", "time": "1:15", "direction": "before",
+    })
+    assert r.status_code == 303
+
+    async with client.db() as s:
+        item = (await s.execute(select(PresetItem))).scalar_one()
+    assert (item.offset_days, item.offset_hours, item.offset_minutes) == (-1, -1, -15)
+
+
+async def test_minutes_only_after_rule_renders_direction_as_after(client):
+    """(0, 0, +15) means "15 minutes after", with days and hours both zero --
+    the direction select must read "after" from the minutes sign alone.
+
+    Fix round 1, Minor 3: dropping `or i.offset_minutes > 0` from the
+    macro's direction expression survives the suite with no coverage of a
+    minutes-only positive item. Real cost: the row re-renders "before"
+    selected, and saving any OTHER field on it (say, the anchor) silently
+    flips the stored offset from +15 to -15.
+
+    Mutation: remove `or i.offset_minutes > 0` from the call site's
+    direction ternary -- this fails because the "after" option would no
+    longer carry `selected`.
+    """
+    login_as(client, USER_A, "reiji")
+    async with client.db() as s:
+        preset = ReminderPreset(user_id=USER_A, name="p")
+        s.add(preset)
+        await s.flush()
+        s.add(PresetItem(
+            preset_id=preset.id, anchor=Anchor.CLOSES,
+            offset_days=0, offset_hours=0, offset_minutes=15,
+        ))
+        await s.commit()
+
+    r = client.get("/preferences")
+    ruleline = r.text[r.text.index('class="ruleline"'):]
+    ruleline = ruleline[:ruleline.index("</form>")]
+    assert 'value="after" selected>' in ruleline
+    assert 'value="before" selected>' not in ruleline
+
+
+def test_add_item_rejects_a_bad_time_value(client):
+    """Fix round 1, Minor 4: only POST /presets had its 422 pinned. Without
+    the try/except in `add_item`, a typo'd time raises an uncaught
+    ValueError instead of answering 422."""
+    login_as(client, USER_A, "reiji")
+    client.post("/presets", data={"name": "p", "anchor": "closes", "days": "3"})
+    r = client.post("/presets/1/items", data={
+        "anchor": "opens", "days": "0", "time": "0:75", "direction": "before",
+    })
+    assert r.status_code == 422
+
+
+def test_edit_item_rejects_a_bad_time_value(client):
+    """Fix round 1, Minor 4: only POST /presets had its 422 pinned. Without
+    the try/except in `edit_item`, a typo'd time raises an uncaught
+    ValueError instead of answering 422."""
+    login_as(client, USER_A, "reiji")
+    client.post("/presets", data={"name": "p", "anchor": "closes", "days": "3"})
+    r = client.post("/presets/1/items/1/edit", data={
+        "anchor": "closes", "days": "1", "time": "0:75", "direction": "before",
+    })
+    assert r.status_code == 422

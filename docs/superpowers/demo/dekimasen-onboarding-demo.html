@@ -1850,12 +1850,19 @@
 
     // offset choices; the special "moment" entry reads as "when" in the
     // sentence ("Remind me when applications open") and hides the relation
-    // dropdown, since there's no before/after for a moment-anchored reminder
+    // dropdown, since there's no before/after for a moment-anchored reminder.
+    // This list mirrors OFFSET_OPTIONS in web/routes/welcome.py and must stay
+    // in step with it -- it had drifted twice by 2026-08-19, in both
+    // directions: the app lacked "30 minutes" (no minutes column until then)
+    // and this demo lacked "6 hours" (shipped in the app and never brought
+    // back here). Minute-level offsets closed both.
     const OFFSETS = [
       { key: 'moment', label: 'when', moment: true },
+      { key: '5m', label: '5 minutes' },
       { key: '30m', label: '30 minutes' },
       { key: '1h', label: '1 hour' },
       { key: '3h', label: '3 hours' },
+      { key: '6h', label: '6 hours' },
       { key: '1d', label: '1 day' },
       { key: '3d', label: '3 days' },
       { key: '5d', label: '5 days' },

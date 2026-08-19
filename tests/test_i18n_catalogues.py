@@ -9,7 +9,7 @@ non-empty.
 It also guards placeholder INTEGRITY: a translation must carry exactly the
 placeholders its msgid does. This matters doubly for the sentence-slot
 patterns (welcome/preferences reminder builders), where a dropped {direction}
-or {hours} would silently render a select-less form whose POST is missing a
+or {time} would silently render a select-less form whose POST is missing a
 field -- split_slots only raises on UNKNOWN slots, so this test is the guard
 for DROPPED ones.
 """

@@ -170,6 +170,7 @@ def _rule_info(r: ReminderRule) -> RuleInfo:
         anchor=r.anchor,
         offset_days=r.offset_days,
         offset_hours=r.offset_hours,
+        offset_minutes=r.offset_minutes,
         round_id=r.round_id,
         concert_id=r.concert_id,
     )
@@ -1146,18 +1147,20 @@ async def _auto_arm_next_round(
     if existing is not None:
         return  # already armed
 
-    offset_days, offset_hours = 0, 0
+    offset_days, offset_hours, offset_minutes = 0, 0, 0
     preset = await get_default_preset(session, user_id)
     if preset is not None:
         await session.refresh(preset, ["items"])
         for item in preset.items:
             if item.anchor is Anchor.OPENS:
-                offset_days, offset_hours = item.offset_days, item.offset_hours
+                offset_days, offset_hours, offset_minutes = (
+                    item.offset_days, item.offset_hours, item.offset_minutes,
+                )
                 break
 
     rule = ReminderRule(
         user_id=user_id, round_id=next_round.id, anchor=Anchor.OPENS,
-        offset_days=offset_days, offset_hours=offset_hours,
+        offset_days=offset_days, offset_hours=offset_hours, offset_minutes=offset_minutes,
     )
     session.add(rule)
     await session.flush()
@@ -3969,11 +3972,18 @@ async def apply_preset(
             ReminderRule.user_id == user_id, ReminderRule.concert_id == concert_id
         )
     )
-    have = {(r.anchor, r.offset_days, r.offset_hours) for r in existing.scalars()}
+    have = {
+        (r.anchor, r.offset_days, r.offset_hours, r.offset_minutes)
+        for r in existing.scalars()
+    }
 
     created = 0
     for item in preset.items:
-        key = (item.anchor, item.offset_days, item.offset_hours)
+        # Every stored offset field belongs in this key. Drop one -- minutes is
+        # the newest and the easiest to forget -- and two items that differ only
+        # in it collide: the second is skipped with no error and no log, so
+        # "30 minutes before closes" silently never becomes a rule.
+        key = (item.anchor, item.offset_days, item.offset_hours, item.offset_minutes)
         if key in have:
             continue
         rule = ReminderRule(
@@ -3982,6 +3992,7 @@ async def apply_preset(
             anchor=item.anchor,
             offset_days=item.offset_days,
             offset_hours=item.offset_hours,
+            offset_minutes=item.offset_minutes,
         )
         session.add(rule)
         await session.flush()
@@ -4151,25 +4162,26 @@ async def create_preset_from_rules(
     session: AsyncSession,
     user_id: int,
     name: str,
-    rules: list[tuple[int, int, str, Anchor]],
+    rules: list[tuple[int, int, int, str, Anchor]],
 ) -> ReminderPreset:
     """Materialise a named preset and its items from (offset_days, offset_hours,
-    direction, anchor) rules -- the welcome wizard's preset step.
+    offset_minutes, direction, anchor) rules -- the welcome wizard's preset step.
 
     This is the SAME write shape POST /presets uses (invariant: no second
     preset write path): direction is not a stored column, it is encoded in the
-    SIGN of the offsets (before = negative, after = positive), and a 0/0 offset
-    is the "when it happens" moment. Returns the flushed preset so the caller
+    SIGN of the offsets (before = negative, after = positive), and an all-zero
+    offset is the "when it happens" moment. Returns the flushed preset so the caller
     can mark it default.
     """
     preset = ReminderPreset(user_id=user_id, name=name.strip() or "My reminders")
     session.add(preset)
     await session.flush()
-    for offset_days, offset_hours, direction, anchor in rules:
+    for offset_days, offset_hours, offset_minutes, direction, anchor in rules:
         sign = 1 if direction == "after" else -1
         session.add(PresetItem(
             preset_id=preset.id, anchor=anchor,
             offset_days=sign * offset_days, offset_hours=sign * offset_hours,
+            offset_minutes=sign * offset_minutes,
         ))
     await session.flush()
     return preset

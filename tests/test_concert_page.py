@@ -31,6 +31,7 @@ from app.db.models import (
     Concert,
     ConcertDay,
     ConcertTag,
+    ReminderRule,
     Round,
     Tag,
     TagMember,
@@ -46,7 +47,7 @@ from app.db.service import (
     set_leg_opt_out,
 )
 from app.db.session import get_session
-from app.domain.types import LegResult, LotteryOutcome, RoundKind, TagKind
+from app.domain.types import Anchor, LegResult, LotteryOutcome, RoundKind, TagKind
 from app.web import auth
 from app.web.app import create_app, fold_count_label
 
@@ -2679,7 +2680,7 @@ async def test_reminders_section_uses_the_row_based_layout(client):
     row carrying a small "Remove" action -- same delete route, new markup."""
     await seed_concert(client.db)
     login(client)
-    client.post("/concerts/np/rules", data={"anchor": "closes", "days_before": 3})
+    client.post("/concerts/np/rules", data={"anchor": "closes", "days": 3})
 
     body = client.get("/concerts/np").text
     rules = body.split('id="rules"', 1)[1].split("</div>\n</article>", 1)[0]
@@ -2706,12 +2707,62 @@ async def test_add_a_reminder_is_a_reveal_not_an_always_open_form(client):
     # The add-rule form must be NESTED inside the reveal, not sitting bare
     # alongside it.
     details_at = rules.index("<details")
-    input_at = rules.index('name="days_before"')
+    input_at = rules.index('name="days"')
     assert details_at < input_at
     # Same route/field names/htmx wiring as before -- presentation only.
     assert 'action="/concerts/np/rules"' in rules
     assert 'hx-post="/concerts/np/rules"' in rules
     assert 'name="anchor"' in rules
+
+
+async def test_the_rule_list_names_a_sub_day_offset_instead_of_saying_same_day(client):
+    """This bug predates minutes: an hours-only rule renders as "Same day"
+    today, because the template reads offset_days alone. The mutation this
+    must not survive: _rules.html going back to an offset_days-only branch."""
+    login(client)
+    cid = await seed_concert(client.db)
+    async with client.db() as s:
+        s.add(ReminderRule(
+            user_id=USER, concert_id=cid, anchor=Anchor.CLOSES,
+            offset_days=0, offset_hours=-3, offset_minutes=0,
+        ))
+        await s.commit()
+
+    page = client.get("/concerts/np")
+    assert "3 hours before" in page.text
+    assert "Same day" not in page.text
+
+
+async def test_adding_a_five_minute_rule_from_the_concert_page(client):
+    login(client)
+    await seed_concert(client.db)
+
+    r = client.post("/concerts/np/rules", data={
+        "anchor": "opens", "days": "0", "time": "0:05",
+    })
+    assert r.status_code == 200
+    assert "5 minutes before" in r.text
+
+    async with client.db() as s:
+        rule = (await s.execute(select(ReminderRule))).scalar_one()
+    assert (rule.offset_days, rule.offset_hours, rule.offset_minutes) == (0, 0, -5)
+
+
+async def test_adding_a_rule_with_a_bad_time_is_422_not_500(client):
+    """The mutation this kills: dropping the route's try/except around
+    parse_hhmm turns a user's typo into an uncaught ValueError -> 500
+    instead of a 422. Also pins that a rejected post creates no row -- a
+    422 that still writes a rule would be worse than the 500."""
+    login(client)
+    await seed_concert(client.db)
+
+    r = client.post("/concerts/np/rules", data={
+        "anchor": "opens", "days": "0", "time": "0:75",
+    })
+    assert r.status_code == 422
+
+    async with client.db() as s:
+        assert (await s.execute(select(ReminderRule))).first() is None
 
 
 async def test_reminders_note_names_the_default_preset(client):

@@ -14,6 +14,7 @@ from app.domain.timezones import fmt_dual
 from app.domain.types import Anchor
 from app.i18n import get_locale, loc_field, set_locale
 from app.i18n import gettext as _
+from app.offsets import describe_offset
 
 ANCHOR_CHOICES = [
     app_commands.Choice(name="before it closes (deadlines)", value=Anchor.CLOSES.value),
@@ -127,6 +128,7 @@ class Reminders(commands.Cog):
         concert="Which concert (start typing to search)",
         anchor="What to remind about",
         days_before="How many days before (0 = same day)",
+        minutes_before="Extra minutes before (e.g. 30). Adds to days.",
     )
     @app_commands.choices(anchor=ANCHOR_CHOICES)
     async def remindme(
@@ -135,6 +137,7 @@ class Reminders(commands.Cog):
         concert: int,
         anchor: app_commands.Choice[str],
         days_before: app_commands.Range[int, 0, 60],
+        minutes_before: app_commands.Range[int, 0, 1439] = 0,
     ) -> None:
         async with SessionMaker() as session:
             user = await ensure_user(session, interaction.user.id, interaction.user.name)
@@ -151,13 +154,15 @@ class Reminders(commands.Cog):
                 concert_id=target.id,
                 anchor=Anchor(anchor.value),
                 offset_days=-days_before,  # UX asks 'days before'; storage is signed
+                offset_hours=-(minutes_before // 60),
+                offset_minutes=-(minutes_before % 60),
             )
             session.add(rule)
             await session.flush()
             await sync_rule(session, rule)
             await session.commit()
 
-        when = _("same day") if days_before == 0 else _("{n} day(s) before").format(n=days_before)
+        when = describe_offset(rule.offset_days, rule.offset_hours, rule.offset_minutes)
         await interaction.response.send_message(
             _("Done — I'll DM you {when} each **{anchor}** for **{title}**.").format(
                 when=when, anchor=anchor.name.removeprefix("before "), title=target.title
@@ -200,9 +205,7 @@ class Reminders(commands.Cog):
         lines = []
         for rule, concert in rows:
             scope = concert.title if concert else _("round #{n}").format(n=rule.round_id)
-            d = abs(rule.offset_days)
-            direction = _("before") if rule.offset_days < 0 else _("after")
-            timing = _("same-day") if d == 0 else f"{d}d {direction}"
+            timing = describe_offset(rule.offset_days, rule.offset_hours, rule.offset_minutes)
             lines.append(f"`#{rule.id}` **{scope}** — {timing} {rule.anchor.value}")
         await interaction.response.send_message("\n".join(lines[:25]), ephemeral=True)
 

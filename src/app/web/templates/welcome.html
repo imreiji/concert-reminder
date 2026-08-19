@@ -92,7 +92,8 @@
 
 {# The fine-tune rows below are the source of truth; picking a card reseeds
    them. The whole thing is one form -- its named selects submit as three
-   aligned arrays (offset "days:hours" / direction / anchor) to /welcome/preset,
+   aligned arrays (offset "days:hours:minutes" / direction / anchor) to
+   /welcome/preset,
    which zips them into a real ReminderPreset. #}
 <form method="post" action="/welcome/preset" id="remForm">
   <div class="remcards" id="remCards">
@@ -142,9 +143,9 @@
      reorder freely, EN reads as before. The direction select is always present
      (hidden for a "moment" offset) so the JS clone and the three POST arrays
      never fall out of step. #}
-  {% macro remrow(days, hours, direction, anchor) -%}
-    {%- set offval = days ~ ":" ~ hours -%}
-    {%- set moment = (days == 0 and hours == 0) -%}
+  {% macro remrow(days, hours, minutes, direction, anchor) -%}
+    {%- set offval = days ~ ":" ~ hours ~ ":" ~ minutes -%}
+    {%- set moment = (days == 0 and hours == 0 and minutes == 0) -%}
     {%- set offset_html %}<select name="offset" data-role="offset" aria-label="{{ _('Timing') }}">{% for o in offset_options %}<option value="{{ o.value }}"{% if o.value == offval %} selected{% endif %}>{{ o.label }}</option>{% endfor %}</select>{% endset -%}
     {%- set direction_html %}<select name="direction" data-role="direction" aria-label="{{ _('Before or after') }}"{% if moment %} hidden{% endif %}><option value="before"{% if direction == "before" %} selected{% endif %}>{{ _("before") }}</option><option value="after"{% if direction == "after" %} selected{% endif %}>{{ _("after") }}</option></select>{% endset -%}
     {%- set anchor_html %}<select name="anchor" data-role="anchor" aria-label="{{ _('Deadline type') }}">{% for a in anchor_order %}<option value="{{ a }}"{% if a == anchor %} selected{% endif %}>{{ anchor_moment[a] if moment else anchor_noun[a] }}</option>{% endfor %}</select>{% endset -%}
@@ -162,13 +163,13 @@
     {# Standard rows rendered server-side: the list is populated with JS off,
        and the script rebuilds the identical rows on load, so there is no flash. #}
     <div class="remrules" id="remRuleList">
-      {% for r in standard_rules %}{{ remrow(r[0], r[1], r[2], r[3]) }}{% endfor %}
+      {% for r in standard_rules %}{{ remrow(r[0], r[1], r[2], r[3], r[4]) }}{% endfor %}
     </div>
     {# One blank row rendered through the SAME macro, in the viewer's language,
        for the JS to clone (kills the old hardcoded-English DOM builder). Cloned
        and re-labelled per row; its "before"-vs-noun anchor phrasing is a
        starting point the clone flow overwrites. #}
-    <template id="remrule-template">{{ remrow(1, 0, "before", "closes") }}</template>
+    <template id="remrule-template">{{ remrow(1, 0, 0, "before", "closes") }}</template>
     <div class="remtune-add">
       <button class="btn quiet" type="button" id="remAddRow">{{ _("+ Add a reminder") }}</button>
     </div>
@@ -259,9 +260,10 @@
     }
 
     function withId(rule) {
-      // rule is [days, hours, direction, anchor]
-      return { id: "r" + (seq++), offset: rule[0] + ":" + rule[1],
-               direction: rule[2] || "before", anchor: rule[3] };
+      // rule is [days, hours, minutes, direction, anchor]; the composed offset
+      // must match an OFFSET_OPTIONS value exactly or the select shows "when".
+      return { id: "r" + (seq++), offset: rule[0] + ":" + rule[1] + ":" + rule[2],
+               direction: rule[3] || "before", anchor: rule[4] };
     }
 
     // Selecting a card replaces the whole list wholesale -- a deliberate reset,
@@ -301,7 +303,7 @@
 
     var addBtn = document.getElementById("remAddRow");
     if (addBtn) addBtn.addEventListener("click", function () {
-      rows.push(withId([1, 0, "before", "closes"]));
+      rows.push(withId([1, 0, 0, "before", "closes"]));
       renderRows();
     });
 

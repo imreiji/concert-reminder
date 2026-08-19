@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version:  dekimasen.app\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-08-13 03:18-0300\n"
+"POT-Creation-Date: 2026-08-19 02:56-0300\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: ja\n"
@@ -14,23 +14,60 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: src/app/bot/cogs/reminders.py:55 src/app/bot/cogs/reminders.py:104
-#: src/app/bot/messages.py:33 src/app/bot/views.py:232 src/app/db/core.py:1693
+#: src/app/offsets.py:67
+msgid "Same day"
+msgstr "当日"
+
+#: src/app/bot/messages.py:52 src/app/offsets.py:71
+#, python-brace-format
+msgid "{n} day"
+msgid_plural "{n} days"
+msgstr[0] "{n}日"
+
+#: src/app/bot/messages.py:49 src/app/offsets.py:73
+#, python-brace-format
+msgid "{n} hour"
+msgid_plural "{n} hours"
+msgstr[0] "{n}時間"
+
+#: src/app/offsets.py:75
+#, python-brace-format
+msgid "{n} minute"
+msgid_plural "{n} minutes"
+msgstr[0] "{n}分"
+
+#: src/app/offsets.py:85
+#, python-brace-format
+msgid "{first} {second}"
+msgstr "{first}{second}"
+
+#: src/app/offsets.py:90
+#, python-brace-format
+msgid "{quantity} after"
+msgstr "{quantity}後"
+
+#: src/app/offsets.py:90
+#, python-brace-format
+msgid "{quantity} before"
+msgstr "{quantity}前"
+
+#: src/app/bot/cogs/reminders.py:56 src/app/bot/cogs/reminders.py:105
+#: src/app/bot/messages.py:33 src/app/bot/views.py:232 src/app/db/core.py:1696
 msgid "opens"
 msgstr "受付開始"
 
-#: src/app/bot/cogs/reminders.py:57 src/app/bot/messages.py:34
-#: src/app/bot/views.py:234 src/app/db/core.py:1694
+#: src/app/bot/cogs/reminders.py:58 src/app/bot/messages.py:34
+#: src/app/bot/views.py:234 src/app/db/core.py:1697
 msgid "closes"
 msgstr "締切"
 
-#: src/app/bot/cogs/reminders.py:106 src/app/bot/messages.py:35
-#: src/app/db/core.py:1695
+#: src/app/bot/cogs/reminders.py:107 src/app/bot/messages.py:35
+#: src/app/db/core.py:1698
 msgid "results announced"
 msgstr "当落発表"
 
-#: src/app/bot/cogs/reminders.py:107 src/app/bot/messages.py:36
-#: src/app/bot/views.py:239 src/app/db/core.py:1696
+#: src/app/bot/cogs/reminders.py:108 src/app/bot/messages.py:36
+#: src/app/bot/views.py:239 src/app/db/core.py:1699
 #: src/app/web/templates/setup.html:155
 msgid "payment due"
 msgstr "入金締切"
@@ -39,21 +76,9 @@ msgstr "入金締切"
 msgid "starts"
 msgstr "開演"
 
-#: src/app/bot/messages.py:46 src/app/web/templates/welcome.html:416
+#: src/app/bot/messages.py:46 src/app/web/templates/welcome.html:418
 msgid "now"
 msgstr "今"
-
-#: src/app/bot/messages.py:49
-#, python-brace-format
-msgid "{n} hour"
-msgid_plural "{n} hours"
-msgstr[0] "{n}時間"
-
-#: src/app/bot/messages.py:52
-#, python-brace-format
-msgid "{n} day"
-msgid_plural "{n} days"
-msgstr[0] "{n}日"
 
 #: src/app/bot/messages.py:53
 #, python-brace-format
@@ -66,7 +91,7 @@ msgid "{unit} ago"
 msgstr "{unit}前"
 
 #: src/app/bot/messages.py:77 src/app/bot/messages.py:185
-#: src/app/db/core.py:1697 src/app/web/templates/tags.html:490
+#: src/app/db/core.py:1700 src/app/web/templates/tags.html:490
 msgid "event"
 msgstr "イベント"
 
@@ -422,201 +447,178 @@ msgstr "閲覧者"
 msgid "pong — latency {ms:.0f}ms — you are a **{role}**"
 msgstr "pong — 遅延 {ms:.0f}ms — あなたは **{role}** です"
 
-#: src/app/bot/cogs/reminders.py:44
+#: src/app/bot/cogs/reminders.py:45
 #, python-brace-format
 msgid "Nothing opens or closes in the next {days} days. 平和ですね。"
 msgstr "今後{days}日間、受付開始も締切もありません。平和ですね。"
 
-#: src/app/bot/cogs/reminders.py:63
+#: src/app/bot/cogs/reminders.py:64
 #, python-brace-format
 msgid "Next {days} days"
 msgstr "今後{days}日間"
 
-#: src/app/bot/cogs/reminders.py:64
+#: src/app/bot/cogs/reminders.py:65
 msgid "Nothing upcoming."
 msgstr "予定はありません。"
 
-#: src/app/bot/cogs/reminders.py:97
+#: src/app/bot/cogs/reminders.py:98
 msgid "Nothing on your calendar yet — follow a tag or an event first."
 msgstr "まだカレンダーに何もありません。まずタグやイベントをフォローしてください。"
 
-#: src/app/bot/cogs/reminders.py:105
+#: src/app/bot/cogs/reminders.py:106
 msgid "apply by"
 msgstr "申込締切"
 
-#: src/app/bot/cogs/reminders.py:117
+#: src/app/bot/cogs/reminders.py:118
 msgid "Your upcoming deadlines"
 msgstr "今後の締切"
 
-#: src/app/bot/cogs/reminders.py:145
+#: src/app/bot/cogs/reminders.py:148
 msgid "That event doesn't exist (deleted?)."
 msgstr "そのイベントは存在しません（削除済み？）。"
 
-#: src/app/bot/cogs/reminders.py:160
-msgid "same day"
-msgstr "当日"
-
-#: src/app/bot/cogs/reminders.py:160
-#, python-brace-format
-msgid "{n} day(s) before"
-msgstr "{n}日前"
-
-#: src/app/bot/cogs/reminders.py:162
+#: src/app/bot/cogs/reminders.py:167
 #, python-brace-format
 msgid "Done — I'll DM you {when} each **{anchor}** for **{title}**."
 msgstr "完了しました。**{title}**の各**{anchor}**の{when}にDMします。"
 
-#: src/app/bot/cogs/reminders.py:196
+#: src/app/bot/cogs/reminders.py:201
 msgid "No rules yet — `/remindme` to create one."
 msgstr "ルールはまだありません。`/remindme`で作成できます。"
 
-#: src/app/bot/cogs/reminders.py:202
+#: src/app/bot/cogs/reminders.py:207
 #, python-brace-format
 msgid "round #{n}"
 msgstr "第{n}次受付"
-
-#: src/app/bot/cogs/reminders.py:204 src/app/web/templates/preferences.html:145
-#: src/app/web/templates/welcome.html:149
-msgid "before"
-msgstr "前"
-
-#: src/app/bot/cogs/reminders.py:204 src/app/web/templates/preferences.html:145
-#: src/app/web/templates/welcome.html:149
-msgid "after"
-msgstr "後"
-
-#: src/app/bot/cogs/reminders.py:205
-msgid "same-day"
-msgstr "当日"
 
 #: src/app/db/broadcast.py:129
 msgid "From dekimasen.app"
 msgstr "dekimasen.app より"
 
-#: src/app/db/core.py:1701
+#: src/app/db/core.py:1704
 msgid "Lottery round"
 msgstr "抽選受付"
 
-#: src/app/db/core.py:1702
+#: src/app/db/core.py:1705
 msgid "Eligibility item sale"
 msgstr "対象商品販売"
 
-#: src/app/db/core.py:1703
+#: src/app/db/core.py:1706
 msgid "Stream ticket sale"
 msgstr "配信チケット販売"
 
-#: src/app/db/core.py:1704
+#: src/app/db/core.py:1707
 msgid "General sale"
 msgstr "一般販売"
 
-#: src/app/db/core.py:1705
+#: src/app/db/core.py:1708
 msgid "Result announcement"
 msgstr "当落発表"
 
-#: src/app/db/core.py:1706
+#: src/app/db/core.py:1709
 msgid "Payment deadline"
 msgstr "入金締切"
 
-#: src/app/db/core.py:1707
+#: src/app/db/core.py:1710
 msgid "First come, first served"
 msgstr "先着"
 
-#: src/app/db/core.py:1708
+#: src/app/db/core.py:1711
 msgid "Overseas tour package"
 msgstr "海外向けツアーパッケージ"
 
-#: src/app/db/core.py:1709
+#: src/app/db/core.py:1712
 msgid "Goods sale"
 msgstr "グッズ販売"
 
-#: src/app/db/core.py:1710
+#: src/app/db/core.py:1713
 msgid "Upgrade round"
 msgstr "アップグレード抽選"
 
-#: src/app/db/core.py:1711 src/app/web/templates/following.html:79
+#: src/app/db/core.py:1714 src/app/web/templates/following.html:79
 msgid "Other"
 msgstr "その他"
 
-#: src/app/db/core.py:2712 src/app/db/core.py:4320 src/app/db/setup_flow.py:107
+#: src/app/db/core.py:2715 src/app/db/core.py:4334 src/app/db/setup_flow.py:107
 #: src/app/web/templates/_board.html:73 src/app/web/templates/discover.html:79
 #: src/app/web/templates/home.html:23
 msgid "Multiple"
 msgstr "複数"
 
-#: src/app/db/core.py:3539
+#: src/app/db/core.py:3542
 #, python-brace-format
 msgid "{n}d"
 msgstr "{n}日"
 
-#: src/app/db/core.py:3541
+#: src/app/db/core.py:3544
 #, python-brace-format
 msgid "{n}h"
 msgstr "{n}時間"
 
-#: src/app/db/core.py:3542
+#: src/app/db/core.py:3545
 #, python-brace-format
 msgid "{n}m"
 msgstr "{n}分"
 
-#: src/app/db/core.py:3639
+#: src/app/db/core.py:3642
 #, python-brace-format
 msgid "Upgrade won — pay by {day}"
 msgstr "アップグレード当選 — {day}までに入金"
 
-#: src/app/db/core.py:3640
+#: src/app/db/core.py:3643
 msgid "Upgrade won — payment due"
 msgstr "アップグレード当選 — 入金締切"
 
-#: src/app/db/core.py:3659
+#: src/app/db/core.py:3662
 msgid "Upgrade · Applied"
 msgstr "アップグレード・申込済み"
 
-#: src/app/db/core.py:3662
+#: src/app/db/core.py:3665
 #, python-brace-format
 msgid "Upgrade · Closes in {n}"
 msgstr "アップグレード・{n}後に締切"
 
-#: src/app/db/core.py:3665
+#: src/app/db/core.py:3668
 msgid "Upgrade · Open now"
 msgstr "アップグレード・受付中"
 
-#: src/app/db/core.py:3671 src/app/web/templates/_board.html:23
+#: src/app/db/core.py:3674 src/app/web/templates/_board.html:23
 #: src/app/web/templates/_deadline_rows.html:35
 #: src/app/web/templates/_round_rows.html:29
 #: src/app/web/templates/home.html:156
 msgid "Secured"
 msgstr "確保済み"
 
-#: src/app/db/core.py:3682
+#: src/app/db/core.py:3685
 #, python-brace-format
 msgid "Won — pay by {day}"
 msgstr "当選 — {day}までに入金"
 
-#: src/app/db/core.py:3683
+#: src/app/db/core.py:3686
 msgid "Won — payment due"
 msgstr "当選 — 入金締切"
 
-#: src/app/db/core.py:3692
+#: src/app/db/core.py:3695
 #, python-brace-format
 msgid "{kind} · Applied"
 msgstr "{kind}・申込済み"
 
-#: src/app/db/core.py:3712
+#: src/app/db/core.py:3715
 #, python-brace-format
 msgid "{kind} · Closes in {n}"
 msgstr "{kind}・{n}後に締切"
 
-#: src/app/db/core.py:3717
+#: src/app/db/core.py:3720
 #, python-brace-format
 msgid "{kind} · Open now"
 msgstr "{kind}・受付中"
 
-#: src/app/db/core.py:3723
+#: src/app/db/core.py:3726
 #, python-brace-format
 msgid "{kind} · Opens in {n}"
 msgstr "{kind}・{n}後に受付開始"
 
-#: src/app/db/core.py:3730
+#: src/app/db/core.py:3733
 msgid "All rounds closed"
 msgstr "すべての受付が終了"
 
@@ -678,64 +680,64 @@ msgstr "名前"
 msgid "City"
 msgstr "都市"
 
-#: src/app/web/app.py:121
+#: src/app/web/app.py:130
 #, python-format
 msgid "%(count)s lost"
 msgid_plural "%(count)s lost"
 msgstr[0] "落選%(count)s件"
 
-#: src/app/web/app.py:123
+#: src/app/web/app.py:132
 #, python-format
 msgid "%(count)s skipped"
 msgid_plural "%(count)s skipped"
 msgstr[0] "見送り%(count)s件"
 
-#: src/app/web/app.py:125
+#: src/app/web/app.py:134
 #, python-format
 msgid "%(count)s covered"
 msgid_plural "%(count)s covered"
 msgstr[0] "確保済み%(count)s件"
 
-#: src/app/web/app.py:127
+#: src/app/web/app.py:136
 #, python-format
 msgid "%(count)s upcoming"
 msgid_plural "%(count)s upcoming"
 msgstr[0] "受付前%(count)s件"
 
-#: src/app/web/app.py:268
+#: src/app/web/app.py:277
 msgid "Page not found"
 msgstr "ページが見つかりません"
 
-#: src/app/web/app.py:269
+#: src/app/web/app.py:278
 msgid "That page doesn't exist. The link may be out of date."
 msgstr "そのページは存在しません。リンクが古くなっている可能性があります。"
 
-#: src/app/web/app.py:271
+#: src/app/web/app.py:280
 msgid "No access"
 msgstr "アクセス権がありません"
 
-#: src/app/web/app.py:277
+#: src/app/web/app.py:286
 #, python-format
 msgid "You're signed in as %(name)s, which doesn't have access to that page."
 msgstr "%(name)s としてサインインしていますが、このアカウントにはそのページへのアクセス権がありません。"
 
-#: src/app/web/app.py:281
+#: src/app/web/app.py:290
 msgid "That page needs an account with more access than yours."
 msgstr "そのページには、より高い権限を持つアカウントが必要です。"
 
-#: src/app/web/app.py:284
+#: src/app/web/app.py:293
 msgid "That didn't go through"
 msgstr "送信できませんでした"
 
-#: src/app/web/app.py:285
+#: src/app/web/app.py:294
 msgid "Nothing was saved. Here's what needs fixing:"
 msgstr "何も保存されていません。次の点を修正してください："
 
-#: src/app/web/app.py:287
+#: src/app/web/app.py:296
 msgid "Something broke"
 msgstr "問題が発生しました"
 
-#: src/app/web/app.py:289
+#: src/app/web/app.py:298
 msgid ""
 "Something broke on our end, and it's been logged. Nothing you did caused "
 "it."
@@ -766,75 +768,83 @@ msgstr "次の締切"
 msgid "Recently added"
 msgstr "最近追加"
 
-#: src/app/web/routes/welcome.py:53
+#: src/app/web/routes/welcome.py:54
 msgid "when"
 msgstr "時"
 
-#: src/app/web/routes/welcome.py:54
+#: src/app/web/routes/welcome.py:55
+msgid "5 minutes"
+msgstr "5分"
+
+#: src/app/web/routes/welcome.py:56
+msgid "30 minutes"
+msgstr "30分"
+
+#: src/app/web/routes/welcome.py:57
 msgid "1 hour"
 msgstr "1時間"
 
-#: src/app/web/routes/welcome.py:55
+#: src/app/web/routes/welcome.py:58
 msgid "3 hours"
 msgstr "3時間"
 
-#: src/app/web/routes/welcome.py:56
+#: src/app/web/routes/welcome.py:59
 msgid "6 hours"
 msgstr "6時間"
 
-#: src/app/web/routes/welcome.py:57
+#: src/app/web/routes/welcome.py:60
 msgid "1 day"
 msgstr "1日"
 
-#: src/app/web/routes/welcome.py:58
+#: src/app/web/routes/welcome.py:61
 msgid "3 days"
 msgstr "3日"
 
-#: src/app/web/routes/welcome.py:59
+#: src/app/web/routes/welcome.py:62
 msgid "5 days"
 msgstr "5日"
 
-#: src/app/web/routes/welcome.py:60
+#: src/app/web/routes/welcome.py:63
 msgid "1 week"
 msgstr "1週間"
 
-#: src/app/web/routes/welcome.py:70
+#: src/app/web/routes/welcome.py:73
 msgid "applications open"
 msgstr "申込受付開始"
 
-#: src/app/web/routes/welcome.py:70
+#: src/app/web/routes/welcome.py:73
 msgid "applications close"
 msgstr "申込締切"
 
-#: src/app/web/routes/welcome.py:71
+#: src/app/web/routes/welcome.py:74
 msgid "results come out"
 msgstr "当落発表"
 
-#: src/app/web/routes/welcome.py:71
+#: src/app/web/routes/welcome.py:74
 msgid "payment is due"
 msgstr "入金締切"
 
-#: src/app/web/routes/welcome.py:72
+#: src/app/web/routes/welcome.py:75
 msgid "the show starts"
 msgstr "開演"
 
-#: src/app/web/routes/welcome.py:75
+#: src/app/web/routes/welcome.py:78
 msgid "the opening"
 msgstr "受付開始"
 
-#: src/app/web/routes/welcome.py:75
+#: src/app/web/routes/welcome.py:78
 msgid "the deadline"
 msgstr "締切"
 
-#: src/app/web/routes/welcome.py:75
+#: src/app/web/routes/welcome.py:78
 msgid "the results"
 msgstr "当落発表"
 
-#: src/app/web/routes/welcome.py:76
+#: src/app/web/routes/welcome.py:79
 msgid "the payment deadline"
 msgstr "入金締切"
 
-#: src/app/web/routes/welcome.py:76
+#: src/app/web/routes/welcome.py:79
 msgid "the show"
 msgstr "公演"
 
@@ -1326,16 +1336,6 @@ msgstr "デフォルトプリセット &mdash; <strong>%(name)s</strong>"
 msgid "No default preset set &mdash; <a href=\"/preferences\">pick one</a>"
 msgstr "デフォルトプリセット未設定 &mdash; <a href=\"/preferences\">選択する</a>"
 
-#: src/app/web/templates/_rules.html:15
-msgid "Same day"
-msgstr "当日"
-
-#: src/app/web/templates/_rules.html:15
-#, python-format
-msgid "%(count)s day before"
-msgid_plural "%(count)s days before"
-msgstr[0] "%(count)s日前"
-
 #: src/app/web/templates/_rules.html:16
 #, python-format
 msgid "each %(anchor)s"
@@ -1363,20 +1363,26 @@ msgstr "このイベントでは、ここで設定したルールがデフォル
 msgid "Add a reminder"
 msgstr "リマインダーを追加"
 
-#: src/app/web/templates/_rules.html:43
-msgid "days before"
-msgstr "日前"
+#: src/app/web/templates/_rules.html:48
+#: src/app/web/templates/preferences.html:144
+msgid "Hours and minutes, like 0:30 or 3:00"
+msgstr "時間と分（例: 0:30、3:00）"
 
-#: src/app/web/templates/_rules.html:47
+#: src/app/web/templates/_rules.html:50
+#, python-brace-format
+msgid "Remind me {days} day(s) {time} before each {anchor}."
+msgstr "各{anchor}の{days}日{time}前に通知。"
+
+#: src/app/web/templates/_rules.html:51
 msgid "Remind me"
 msgstr "通知する"
 
-#: src/app/web/templates/_rules.html:55
+#: src/app/web/templates/_rules.html:59
 #, python-format
 msgid "Apply &ldquo;%(name)s&rdquo;"
 msgstr "&ldquo;%(name)s&rdquo;を適用"
 
-#: src/app/web/templates/_rules.html:58
+#: src/app/web/templates/_rules.html:62
 msgid "Edit presets"
 msgstr "プリセットを編集"
 
@@ -1607,7 +1613,7 @@ msgstr "ダークモード切替"
 
 #: src/app/web/templates/base.html:72
 #: src/app/web/templates/preferences.html:254
-#: src/app/web/templates/welcome.html:377
+#: src/app/web/templates/welcome.html:379
 msgid "Language"
 msgstr "言語"
 
@@ -2993,6 +2999,16 @@ msgid ""
 "change the rules for one event, those rules are used instead."
 msgstr "プリセットは、フォロー中のイベントに使うリマインダー設定のセットです。個別のイベントで設定を変更した場合は、そちらが使われます。"
 
+#: src/app/web/templates/preferences.html:145
+#: src/app/web/templates/welcome.html:150
+msgid "before"
+msgstr "前"
+
+#: src/app/web/templates/preferences.html:145
+#: src/app/web/templates/welcome.html:150
+msgid "after"
+msgstr "後"
+
 #: src/app/web/templates/preferences.html:148
 msgid "Opens"
 msgstr "受付開始"
@@ -3011,8 +3027,8 @@ msgstr "開演"
 
 #: src/app/web/templates/preferences.html:150
 #, python-brace-format
-msgid "Remind me {days} day(s) {hours} hour(s) {direction} each {anchor}."
-msgstr "各{anchor}の{days}日{hours}時間{direction}に通知。"
+msgid "Remind me {days} day(s) {time} {direction} each {anchor}."
+msgstr "各{anchor}の{days}日{time}{direction}に通知。"
 
 #: src/app/web/templates/preferences.html:158
 msgid "Rename"
@@ -3081,37 +3097,37 @@ msgid "Every deadline shows JST first, then yours. This sets the second one."
 msgstr "すべての締切には、JSTに続けて現地時刻を表示します。ここでは現地時刻のタイムゾーンを設定します。"
 
 #: src/app/web/templates/preferences.html:218
-#: src/app/web/templates/welcome.html:334
+#: src/app/web/templates/welcome.html:336
 msgid "Your timezone"
 msgstr "現地のタイムゾーン"
 
 #: src/app/web/templates/preferences.html:220
-#: src/app/web/templates/welcome.html:336
+#: src/app/web/templates/welcome.html:338
 msgid "Common"
 msgstr "よく使うタイムゾーン"
 
 #: src/app/web/templates/preferences.html:223
-#: src/app/web/templates/welcome.html:339
+#: src/app/web/templates/welcome.html:341
 msgid "All zones (IANA)"
 msgstr "すべてのゾーン（IANA）"
 
 #: src/app/web/templates/preferences.html:234
-#: src/app/web/templates/welcome.html:345
+#: src/app/web/templates/welcome.html:347
 msgid "Detection"
 msgstr "検出"
 
 #: src/app/web/templates/preferences.html:235
-#: src/app/web/templates/welcome.html:346
+#: src/app/web/templates/welcome.html:348
 msgid "Timezone detection mode"
 msgstr "タイムゾーン検出モード"
 
 #: src/app/web/templates/preferences.html:236
-#: src/app/web/templates/welcome.html:347
+#: src/app/web/templates/welcome.html:349
 msgid "Follow my browser"
 msgstr "ブラウザの設定に合わせる"
 
 #: src/app/web/templates/preferences.html:237
-#: src/app/web/templates/welcome.html:348
+#: src/app/web/templates/welcome.html:350
 msgid "Keep what I picked"
 msgstr "選択した設定を使う"
 
@@ -3147,7 +3163,7 @@ msgid "Discord DMs reaching you"
 msgstr "DiscordのDMを受信できます"
 
 #: src/app/web/templates/preferences.html:282
-#: src/app/web/templates/welcome.html:403
+#: src/app/web/templates/welcome.html:405
 msgid "Send a test DM"
 msgstr "テストDMを送信"
 
@@ -3178,7 +3194,7 @@ msgid "Generate a new one"
 msgstr "新しく生成する"
 
 #: src/app/web/templates/preferences.html:311
-#: src/app/web/templates/welcome.html:452
+#: src/app/web/templates/welcome.html:454
 msgid "Generate feed link"
 msgstr "フィードリンクを生成"
 
@@ -3719,7 +3735,7 @@ msgid "Turn all off"
 msgstr "すべて選択解除"
 
 #: src/app/web/templates/setup.html:58 src/app/web/templates/setup.html:95
-#: src/app/web/templates/welcome.html:82 src/app/web/templates/welcome.html:429
+#: src/app/web/templates/welcome.html:82 src/app/web/templates/welcome.html:431
 msgid "Continue"
 msgstr "続ける"
 
@@ -4241,154 +4257,154 @@ msgid ""
 " event are used instead."
 msgstr "イベントで「リマインダーを設定」をタップしたとき、またはDiscordのDMボタンを押したときに、このプリセットが使われます。毎回同じ設定を使えます。個別のイベントで設定したルールがある場合は、そちらが使われます。"
 
-#: src/app/web/templates/welcome.html:101
+#: src/app/web/templates/welcome.html:102
 msgid "Fewer reminders"
 msgstr "通知少なめ"
 
-#: src/app/web/templates/welcome.html:102
+#: src/app/web/templates/welcome.html:103
 msgid "Relaxed"
 msgstr "ゆったり"
 
-#: src/app/web/templates/welcome.html:104
-#: src/app/web/templates/welcome.html:118
+#: src/app/web/templates/welcome.html:105
+#: src/app/web/templates/welcome.html:119
 msgid "Opens — when applications open"
 msgstr "受付開始：申込受付開始時"
 
-#: src/app/web/templates/welcome.html:105
+#: src/app/web/templates/welcome.html:106
 msgid "Closes — 1 day before"
 msgstr "締切：1日前"
 
-#: src/app/web/templates/welcome.html:106
-#: src/app/web/templates/welcome.html:120
-#: src/app/web/templates/welcome.html:131
+#: src/app/web/templates/welcome.html:107
+#: src/app/web/templates/welcome.html:121
+#: src/app/web/templates/welcome.html:132
 msgid "Results — when results come out"
 msgstr "当落発表：発表時"
 
-#: src/app/web/templates/welcome.html:107
+#: src/app/web/templates/welcome.html:108
 msgid "Payment — when payment is due"
 msgstr "入金：入金締切時"
 
-#: src/app/web/templates/welcome.html:112
+#: src/app/web/templates/welcome.html:113
 msgid "Balanced"
 msgstr "バランス型"
 
-#: src/app/web/templates/welcome.html:114
+#: src/app/web/templates/welcome.html:115
 msgid "Standard"
 msgstr "標準"
 
-#: src/app/web/templates/welcome.html:115
+#: src/app/web/templates/welcome.html:116
 msgid "Recommended"
 msgstr "おすすめ"
 
-#: src/app/web/templates/welcome.html:119
+#: src/app/web/templates/welcome.html:120
 msgid "Closes — 3 days &amp; 1 day before"
 msgstr "締切：3日前 &amp; 1日前"
 
-#: src/app/web/templates/welcome.html:121
+#: src/app/web/templates/welcome.html:122
 msgid "Payment — 1 day before"
 msgstr "入金：1日前"
 
-#: src/app/web/templates/welcome.html:126
+#: src/app/web/templates/welcome.html:127
 msgid "More reminders"
 msgstr "通知多め"
 
-#: src/app/web/templates/welcome.html:127
+#: src/app/web/templates/welcome.html:128
 msgid "Frequent"
 msgstr "こまめ"
 
-#: src/app/web/templates/welcome.html:129
+#: src/app/web/templates/welcome.html:130
 msgid "Opens — 1 day before &amp; when applications open"
 msgstr "受付開始：1日前 &amp; 申込受付開始時"
 
-#: src/app/web/templates/welcome.html:130
+#: src/app/web/templates/welcome.html:131
 msgid "Closes — 5, 3 &amp; 1 days before"
 msgstr "締切：5日前、3日前 &amp; 1日前"
 
-#: src/app/web/templates/welcome.html:132
+#: src/app/web/templates/welcome.html:133
 msgid "Payment — 3 &amp; 1 days before"
 msgstr "入金：3日前 &amp; 1日前"
 
-#: src/app/web/templates/welcome.html:137
+#: src/app/web/templates/welcome.html:138
 msgid ""
 "Get one reminder when applications open, results are announced, and "
 "payment is due. You also get two reminders before applications close. You"
 " can change these below or later in Preferences."
 msgstr "受付開始、当落発表、入金締切のときに、それぞれ1回通知します。申込締切前には2回通知します。以下または後から設定画面で変更できます。"
 
-#: src/app/web/templates/welcome.html:148
+#: src/app/web/templates/welcome.html:149
 msgid "Timing"
 msgstr "タイミング"
 
-#: src/app/web/templates/welcome.html:149
+#: src/app/web/templates/welcome.html:150
 msgid "Before or after"
 msgstr "前／後"
 
-#: src/app/web/templates/welcome.html:150
+#: src/app/web/templates/welcome.html:151
 msgid "Deadline type"
 msgstr "締切の種類"
 
-#: src/app/web/templates/welcome.html:152
+#: src/app/web/templates/welcome.html:153
 #, python-brace-format
 msgid "Remind me {offset} {direction} {anchor}."
 msgstr "{anchor}の{offset}{direction}に通知。"
 
-#: src/app/web/templates/welcome.html:153
+#: src/app/web/templates/welcome.html:154
 msgid "Remove this reminder"
 msgstr "このリマインダーを削除"
 
-#: src/app/web/templates/welcome.html:159
+#: src/app/web/templates/welcome.html:160
 msgid "Edit these reminders"
 msgstr "リマインダーを編集"
 
-#: src/app/web/templates/welcome.html:160
+#: src/app/web/templates/welcome.html:161
 msgid "Use the menus below to change each reminder."
 msgstr "下のメニューから各リマインダーを変更できます。"
 
-#: src/app/web/templates/welcome.html:173
+#: src/app/web/templates/welcome.html:174
 msgid "+ Add a reminder"
 msgstr "+ リマインダーを追加"
 
-#: src/app/web/templates/welcome.html:178
+#: src/app/web/templates/welcome.html:179
 msgid "Rules set on one event are used instead of this preset."
 msgstr "個別のイベントで設定したルールが、このプリセットより優先されます。"
 
-#: src/app/web/templates/welcome.html:179
+#: src/app/web/templates/welcome.html:180
 msgid "Skip this step"
 msgstr "このステップをスキップ"
 
-#: src/app/web/templates/welcome.html:180
+#: src/app/web/templates/welcome.html:181
 msgid "Create preset &amp; continue"
 msgstr "プリセットを作成 &amp; 次へ"
 
-#: src/app/web/templates/welcome.html:205
+#: src/app/web/templates/welcome.html:206
 msgid "No reminders yet — add one below."
 msgstr "リマインダーはまだありません。下から追加してください。"
 
-#: src/app/web/templates/welcome.html:317
+#: src/app/web/templates/welcome.html:319
 msgid "Confirm your timezone"
 msgstr "タイムゾーンを確認"
 
-#: src/app/web/templates/welcome.html:318
+#: src/app/web/templates/welcome.html:320
 msgid ""
 "Deadlines always show JST first, then this timezone — so you never have "
 "to convert a\n"
 "    23:59 JST close in your head."
 msgstr "締切時刻はJSTを先に、その後に選択したタイムゾーンで表示します。23:59 JSTの締切も、自分で換算する必要はありません。"
 
-#: src/app/web/templates/welcome.html:322
+#: src/app/web/templates/welcome.html:324
 #, python-format
 msgid "Detected <strong>%(tz)s</strong>"
 msgstr "<strong>%(tz)s</strong>を検出しました"
 
-#: src/app/web/templates/welcome.html:323
+#: src/app/web/templates/welcome.html:325
 msgid "(auto-detected from your browser)"
 msgstr "（ブラウザから自動検出）"
 
-#: src/app/web/templates/welcome.html:343
+#: src/app/web/templates/welcome.html:345
 msgid "Use this timezone"
 msgstr "このタイムゾーンを使う"
 
-#: src/app/web/templates/welcome.html:391
+#: src/app/web/templates/welcome.html:393
 #, python-format
 msgid ""
 "Right now that reads\n"
@@ -4397,21 +4413,21 @@ msgstr ""
 "現在の現地時刻は\n"
 "  <span class=\"num\">%(tz_preview)s</span>です。"
 
-#: src/app/web/templates/welcome.html:396
+#: src/app/web/templates/welcome.html:398
 msgid "Looks right, continue"
 msgstr "問題なければ続ける"
 
-#: src/app/web/templates/welcome.html:404
+#: src/app/web/templates/welcome.html:406
 msgid ""
 "Send a test DM now to check that Discord reminders work. If your DMs are "
 "blocked, we'll tell you here."
 msgstr "テストDMを送って、Discordのリマインダーを受信できるか確認します。DMがブロックされている場合は、ここでお知らせします。"
 
-#: src/app/web/templates/welcome.html:409
+#: src/app/web/templates/welcome.html:411
 msgid "Send test DM"
 msgstr "テストDMを送信"
 
-#: src/app/web/templates/welcome.html:418
+#: src/app/web/templates/welcome.html:420
 msgid ""
 "✅ <b>Test reminder.</b> If you can read this, test DMs are working. "
 "Deadline reminders will look like this and show both JST and your time "
@@ -4420,31 +4436,31 @@ msgstr ""
 "✅ "
 "<b>テストリマインダー。</b>これを読めれば、テストDMは正常に届いています。締切リマインダーもこの形式で、JSTと現地時刻の両方を表示します。"
 
-#: src/app/web/templates/welcome.html:423
+#: src/app/web/templates/welcome.html:425
 msgid ""
 "The Discord bot isn't running in this environment\n"
 "  (dev mode), so DMs can't be tested here."
 msgstr "この環境ではDiscordボットが稼働していないため（開発モード）、DMのテストはできません。"
 
-#: src/app/web/templates/welcome.html:436
+#: src/app/web/templates/welcome.html:438
 msgid "Get your calendar feed"
 msgstr "カレンダーフィードを取得"
 
-#: src/app/web/templates/welcome.html:437
+#: src/app/web/templates/welcome.html:439
 msgid ""
 "One link your calendar app subscribes to: every show you follow, and the "
 "deadlines that still need you. A backup to Discord DMs."
 msgstr "カレンダーアプリに1つのリンクを登録するだけ。フォロー中の公演と、まだ対応が必要な締切がすべて入ります。Discord DMのバックアップにも。"
 
-#: src/app/web/templates/welcome.html:448
+#: src/app/web/templates/welcome.html:450
 msgid "Your feed is active."
 msgstr "フィードは有効です。"
 
-#: src/app/web/templates/welcome.html:458
+#: src/app/web/templates/welcome.html:460
 msgid "You're ready. Next, choose which events you plan to attend."
 msgstr "準備完了です。次に、参加予定のイベントを選びます。"
 
-#: src/app/web/templates/welcome.html:459
+#: src/app/web/templates/welcome.html:461
 msgid "Continue to my events"
 msgstr "イベントの選択へ"
 
@@ -4559,4 +4575,17 @@ msgstr "イベントの選択へ"
 
 #~ msgid "The Discord 'Set my reminders' button applies this preset"
 #~ msgstr "Discordの「リマインダーを設定」ボタンを押すと、このプリセットが適用されます。"
+
+#~ msgid "same day"
+#~ msgstr "当日"
+
+#~ msgid "{n} day(s) before"
+#~ msgstr "{n}日前"
+
+#~ msgid "same-day"
+#~ msgstr "当日"
+
+#~ msgid "%(count)s day before"
+#~ msgid_plural "%(count)s days before"
+#~ msgstr[0] "%(count)s日前"
 

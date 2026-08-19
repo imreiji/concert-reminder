@@ -103,7 +103,10 @@ undo.
 - `src/app/discovery.py` (the sweep runner), `src/app/calendars.py` (which
   `.ics` feeds it reads), `src/app/llm.py` (the one DeepSeek call),
   `src/app/triage.py` and `src/app/draft_completion.py` (the AI passes),
-  `src/app/ops.py` (health checks), `src/app/i18n.py` (gettext plumbing).
+  `src/app/ops.py` (health checks), `src/app/i18n.py` (gettext plumbing),
+  `src/app/offsets.py` (the one parse/format/describe for a reminder offset —
+  above `domain/` because `describe_offset` needs gettext, and the single
+  source of the phrase both shells render).
   All sit ABOVE `db/`: they import it, nothing in it imports them.
 
 ### The few footguns worth keeping in front of you

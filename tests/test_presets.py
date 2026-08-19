@@ -11,11 +11,13 @@ from sqlalchemy import select
 from app.config import settings
 from app.db.models import (
     Notification,
+    PresetItem,
     ReminderQueue,
     ReminderRule,
     TagSubscription,
 )
 from app.db.session import get_session
+from app.domain.types import Anchor
 from app.web import auth
 from app.web.app import create_app
 
@@ -132,6 +134,52 @@ async def test_apply_is_idempotent(client):
     client.post("/concerts/hasunosora-6th/presets/1/apply")
     client.post("/concerts/hasunosora-6th/presets/1/apply")
     assert len(await _all(client.db, ReminderRule)) == 2  # clicks are harmless
+
+
+async def test_a_sub_hour_item_is_not_swallowed_by_the_whole_hour_one(client):
+    """The mutation this must not survive: leaving offset_minutes out of
+    apply_preset's `have`/`key` tuples. Both items below anchor on CLOSES at
+    zero days and zero hours, so a key without minutes makes them equal and the
+    second rule is never created -- silently, with no error anywhere."""
+    login_as(client, EDITOR_ID, "reiji")
+    build_concert_with_deadlines(client)
+    client.post("/presets", data={"name": "fcfs"})
+    # Seeded directly, NOT through the form: the `time` field does not exist
+    # until Task 4, and the dedupe is a service-layer property anyway.
+    async with client.db() as s:
+        s.add_all([
+            PresetItem(preset_id=1, anchor=Anchor.CLOSES,
+                       offset_days=0, offset_hours=0, offset_minutes=0),
+            PresetItem(preset_id=1, anchor=Anchor.CLOSES,
+                       offset_days=0, offset_hours=0, offset_minutes=-30),
+        ])
+        await s.commit()
+
+    assert client.post("/concerts/hasunosora-6th/presets/1/apply").status_code == 200
+
+    rules = await _all(client.db, ReminderRule)
+    at_close = sorted(
+        r.offset_minutes for r in rules
+        if r.anchor is Anchor.CLOSES and r.offset_days == 0
+    )
+    assert at_close == [-30, 0], "the 30-minute item collided with the moment one"
+
+
+async def test_applying_a_preset_with_minutes_twice_creates_nothing_new(client):
+    """The dedupe must keep dedupING once it has a third field to compare."""
+    login_as(client, EDITOR_ID, "reiji")
+    build_concert_with_deadlines(client)
+    client.post("/presets", data={"name": "fcfs"})
+    async with client.db() as s:
+        s.add(PresetItem(preset_id=1, anchor=Anchor.CLOSES,
+                         offset_days=0, offset_hours=0, offset_minutes=-30))
+        await s.commit()
+
+    client.post("/concerts/hasunosora-6th/presets/1/apply")
+    before = len(await _all(client.db, ReminderRule))
+    client.post("/concerts/hasunosora-6th/presets/1/apply")
+
+    assert len(await _all(client.db, ReminderRule)) == before
 
 
 def test_cannot_apply_someone_elses_preset(client):
@@ -761,7 +809,7 @@ async def test_tick_transient_failure_leaves_dm_blocked_unchanged(client):
 async def test_new_preset_is_born_with_its_first_item(client):
     login_as(client, FAN_ID, "fan")
     r = client.post("/presets", data={
-        "name": "standard", "anchor": "closes", "days": 5, "hours": 2, "direction": "before",
+        "name": "standard", "anchor": "closes", "days": 5, "time": "2:00", "direction": "before",
     })
     assert r.status_code == 303
     from app.db.models import PresetItem
@@ -784,7 +832,7 @@ async def test_edit_item_in_place_every_field(client):
     login_as(client, FAN_ID, "fan")
     client.post("/presets", data={"name": "s", "anchor": "closes", "days": 3})
     client.post("/presets/1/items/1/edit", data={
-        "anchor": "event_start", "days": 7, "hours": 12, "direction": "after",
+        "anchor": "event_start", "days": 7, "time": "12:00", "direction": "after",
     })
     from app.db.models import PresetItem
     from app.domain.types import Anchor
@@ -868,7 +916,7 @@ async def test_snooze_rearms_with_deadline_cap(client):
             "round_label_zh": ["R1"], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
-    client.post("/concerts/c/rules", data={"anchor": "closes", "days_before": 3})
+    client.post("/concerts/c/rules", data={"anchor": "closes", "days": 3})
 
     async with client.db() as s:
         (row,) = await _all(client.db, ReminderQueue)
@@ -933,7 +981,7 @@ async def test_snooze_reminder_accepts_custom_day_count(client):
             "round_label_zh": ["R1"], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
-    client.post("/concerts/c2/rules", data={"anchor": "closes", "days_before": 3})
+    client.post("/concerts/c2/rules", data={"anchor": "closes", "days": 3})
 
     async with client.db() as s:
         (row,) = await _all(client.db, ReminderQueue)
@@ -960,7 +1008,7 @@ async def test_snooze_reminder_default_days_matches_existing_behavior(client):
             "round_label_zh": ["R1"], "round_url": [""], "round_notes": [""], "round_leg": [""],
         },
     )
-    client.post("/concerts/c3/rules", data={"anchor": "closes", "days_before": 3})
+    client.post("/concerts/c3/rules", data={"anchor": "closes", "days": 3})
 
     async with client.db() as s:
         (row,) = await _all(client.db, ReminderQueue)
