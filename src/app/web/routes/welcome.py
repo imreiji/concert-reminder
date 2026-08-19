@@ -202,9 +202,10 @@ async def create_wizard_preset(
     a real ReminderPreset via the shared service (no second write path), mark it
     the user's default, then advance into the timezone step.
 
-    Each offset arrives as "days:hours" (the fine-tune UI's own encoding, since
-    PresetItem stores days+hours only); direction and anchor ride alongside as
-    matching arrays. A short/mismatched tail is ignored by zip's own truncation.
+    Each offset arrives as "days:hours" (the fine-tune UI's own encoding);
+    direction and anchor ride alongside as matching arrays. A short/mismatched
+    tail is ignored by zip's own truncation. PresetItem also stores minutes now,
+    but this wizard offers no sub-hour choice yet, so every rule sends 0.
 
     Two defensive checks, both against a tampered POST the closed <select>s
     would never send themselves: an empty `rules` list would otherwise create
@@ -214,11 +215,14 @@ async def create_wizard_preset(
     unhandled ValueError (500) instead of a clean 422.
     """
     db_user = await ensure_user(session, user.id, user.username)
-    rules: list[tuple[int, int, str, Anchor]] = []
+    rules: list[tuple[int, int, int, str, Anchor]] = []
     for off, dir_, anc in zip(offset, direction, anchor, strict=False):
         days_str, _sep, hours_str = off.partition(":")
         try:
-            rules.append((int(days_str or 0), int(hours_str or 0), dir_, Anchor(anc)))
+            # Minutes is 0 here on purpose: this wizard's offset encoding is
+            # still "days:hours", so the sub-hour half of a preset item has no
+            # way to arrive yet. It is the wizard UI's turn to grow one.
+            rules.append((int(days_str or 0), int(hours_str or 0), 0, dir_, Anchor(anc)))
         except ValueError as e:
             raise HTTPException(status_code=422, detail=f"bad reminder row: {e}") from e
     if not rules:

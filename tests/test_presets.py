@@ -11,11 +11,13 @@ from sqlalchemy import select
 from app.config import settings
 from app.db.models import (
     Notification,
+    PresetItem,
     ReminderQueue,
     ReminderRule,
     TagSubscription,
 )
 from app.db.session import get_session
+from app.domain.types import Anchor
 from app.web import auth
 from app.web.app import create_app
 
@@ -132,6 +134,52 @@ async def test_apply_is_idempotent(client):
     client.post("/concerts/hasunosora-6th/presets/1/apply")
     client.post("/concerts/hasunosora-6th/presets/1/apply")
     assert len(await _all(client.db, ReminderRule)) == 2  # clicks are harmless
+
+
+async def test_a_sub_hour_item_is_not_swallowed_by_the_whole_hour_one(client):
+    """The mutation this must not survive: leaving offset_minutes out of
+    apply_preset's `have`/`key` tuples. Both items below anchor on CLOSES at
+    zero days and zero hours, so a key without minutes makes them equal and the
+    second rule is never created -- silently, with no error anywhere."""
+    login_as(client, EDITOR_ID, "reiji")
+    build_concert_with_deadlines(client)
+    client.post("/presets", data={"name": "fcfs"})
+    # Seeded directly, NOT through the form: the `time` field does not exist
+    # until Task 4, and the dedupe is a service-layer property anyway.
+    async with client.db() as s:
+        s.add_all([
+            PresetItem(preset_id=1, anchor=Anchor.CLOSES,
+                       offset_days=0, offset_hours=0, offset_minutes=0),
+            PresetItem(preset_id=1, anchor=Anchor.CLOSES,
+                       offset_days=0, offset_hours=0, offset_minutes=-30),
+        ])
+        await s.commit()
+
+    assert client.post("/concerts/hasunosora-6th/presets/1/apply").status_code == 200
+
+    rules = await _all(client.db, ReminderRule)
+    at_close = sorted(
+        r.offset_minutes for r in rules
+        if r.anchor is Anchor.CLOSES and r.offset_days == 0
+    )
+    assert at_close == [-30, 0], "the 30-minute item collided with the moment one"
+
+
+async def test_applying_a_preset_with_minutes_twice_creates_nothing_new(client):
+    """The dedupe must keep dedupING once it has a third field to compare."""
+    login_as(client, EDITOR_ID, "reiji")
+    build_concert_with_deadlines(client)
+    client.post("/presets", data={"name": "fcfs"})
+    async with client.db() as s:
+        s.add(PresetItem(preset_id=1, anchor=Anchor.CLOSES,
+                         offset_days=0, offset_hours=0, offset_minutes=-30))
+        await s.commit()
+
+    client.post("/concerts/hasunosora-6th/presets/1/apply")
+    before = len(await _all(client.db, ReminderRule))
+    client.post("/concerts/hasunosora-6th/presets/1/apply")
+
+    assert len(await _all(client.db, ReminderRule)) == before
 
 
 def test_cannot_apply_someone_elses_preset(client):
