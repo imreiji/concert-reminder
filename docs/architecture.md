@@ -1742,10 +1742,17 @@ measurement or an incident that a reasonable-looking edit would undo.
   `ReminderPreset` through the single `db/service.py` helper
   `create_preset_from_rules` (no second write path), offering three
   template rule sets (Relaxed / Standard / On the ball) plus a
-  sentence-style fine-tune list over the five anchors. Offsets are
-  days+hours only -- `PresetItem` has no minutes column, so the wizard
-  cannot offer a "30 minutes before" choice; see the minute-offset entry
-  in WISHLIST.md.
+  sentence-style fine-tune list over the five anchors. Offsets go down to
+  the minute (`PresetItem.offset_minutes`), but the wizard deliberately
+  keeps a curated named-offset `<select>` (`OFFSET_OPTIONS`, including
+  "5 minutes" and "30 minutes") rather than the editor's free HH:MM box --
+  onboarding offers a short list of good answers, the editor is where an
+  exact one is typed. Every option encodes "days:hours:minutes", and that
+  encoding must mean the same thing in three places at once --
+  `OFFSET_OPTIONS` here, the fine-tune JavaScript in `welcome.html`, and
+  `create_wizard_preset`'s parser -- so a widening that misses one of the
+  three fails silently: the page renders, the user picks "30 minutes", and
+  the preset comes out at zero offset.
 - `routes/setup.py` — the first-run capture flow, run AFTER the `/welcome`
   wizard. Three plain GETs (`/setup` prune tiles → `/setup/applications` →
   `/setup/ready` reveal) plus two batch POSTs. NO capture-flow step state

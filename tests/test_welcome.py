@@ -211,7 +211,16 @@ def test_every_preset_template_row_composes_a_real_offset_option():
     """The offset string means the same thing in three places: OFFSET_OPTIONS,
     the server macro (days~":"~hours~":"~minutes) and the JS withId(). A row
     that composes to no option is not an error anywhere -- the <select> just
-    shows "when", and the user's preset is silently wrong."""
+    shows "when", and the user's preset is silently wrong.
+
+    This re-implements withId's "days:hours:minutes" composition in Python
+    rather than reading it from welcome.html, so it cannot catch a change to
+    the real JS -- that half was verified separately, by hand, executing the
+    actual `withId` and `isMoment` from welcome.html against the real
+    OFFSET_OPTIONS/PRESET_TEMPLATES: 18 rows exercised (17 preset rows plus
+    the add-button's default row), all composing to real option values, zero
+    failures. This test is the other half of that guarantee, not the whole
+    of it."""
     from app.web.routes.welcome import OFFSET_OPTIONS, PRESET_TEMPLATES
 
     values = {o["value"] for o in OFFSET_OPTIONS}

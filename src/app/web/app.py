@@ -77,11 +77,12 @@ templates.env.globals["current_locale"] = i18n.get_locale  # {{ current_locale()
 # rule has exactly one definition and _board.html can call it inline.
 templates.env.globals["visible_rungs"] = visible_rungs
 # Sub-day reminder offsets (app/offsets.py): `hhmm` re-fills the editor's
-# h:mm box with a magnitude ("0:30"); `describe_offset` is the one translated
-# phrase for a stored, signed offset. Registered together even though only
-# `hhmm` has a caller yet -- preferences.html's own macro (Task 4) -- because
-# Task 5's template needs `describe_offset` and this is the one place either
-# import list needs touching.
+# h:mm box with a magnitude ("0:30"), used by preferences.html's rule-editing
+# macro; `describe_offset` is the one translated phrase for a stored, signed
+# offset, used by `_rules.html` (the concert page and /myreminders) and
+# mirrored in `bot/cogs/reminders.py` for the Discord embed -- one describer
+# shared by both shells, not a copy per surface (see the offsets.py entry in
+# docs/architecture.md for why a second copy drifted before).
 templates.env.globals["hhmm"] = format_hhmm
 templates.env.globals["describe_offset"] = describe_offset
 
