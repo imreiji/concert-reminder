@@ -1193,172 +1193,35 @@ Entries below renumber by removal only: old #24 and #25 become #23 and #24,
 and the two live pointers at old #24 (in the round poll phase 2 Shipped
 entry) were corrected in place rather than left to rot.
 
+**The 2026-08-19 pass ships #1, minute-level reminder offsets, and ends the
+longest run this file has ever recorded**: seventeen ranking moves across a
+month, and not one of them ever judged the entry less valuable -- every note
+in it says position, never substance. A reminder offset now carries minutes:
+the preset editor's and the concert page's second box takes an exact `h:mm`
+(`0:05`, `1:30`) where it used to be a whole-hours dropdown, `/remindme`
+takes `minutes_before`, and the wizard's fine-tune list gets *5 minutes* and
+*30 minutes*. It also closes a live misreport nobody had filed -- a "3 hours
+before" rule had been describing itself as *Same day* on the concert page and
+`same-day` in Discord, because both surfaces read `offset_days` alone.
+**Nothing moves on merit.** All twenty-three remaining entries were re-read
+against the build; it touches one column on two tables, one new module, four
+render surfaces and two catalogues, and comes nowhere near any of their
+subjects -- the closest, #2 (the cosmetic `RoundKind` members), is close only
+because `RoundKind.FCFS_SALE` is what made this entry urgent, and this build
+neither added a member nor gave one behaviour, so the ten-of-eleven count is
+untouched. #16 (the demos' grammar migration) was read specifically because
+this build DID edit a demo: it synced the onboarding demo's `OFFSETS` array,
+which is a content claim, not the `.banner`/`.edgecard` CSS grammar #16 is
+about, so #16 stands as written. Entries below renumber by removal only: old
+#2-#24 become #1-#23. Six live pointers into Proposed were corrected in place
+(three inside Proposed itself, three in Shipped entries), the two "read this
+number as that one today" parentheticals at the tail of Proposed gained the
+one-more-subtraction this pass causes, and the two bracketed staleness notes
+on the round-poll revision paragraphs were updated to name both passes.
+
 ## Proposed (highest impact first)
 
-### 1. Minute-level reminder offsets
-
-Impact: medium (raised from low) - effort: small. Raised: 2026-07-18
-(domain-model review discussion). Re-ranked 2026-07-19.
-
-`ReminderRule`/`PresetItem` already support `offset_days` + `offset_hours`
-(0-23); there's no `offset_minutes`. The 60s scheduler tick already
-delivers at ~1-minute granularity, so the gap is purely the data model +
-form UI, not scheduling precision.
-
-Re-ranked up because the condition the owner attached to it has now
-fired: the entry said "revisit if/when FCFS-style rounds get their own
-flag", and `RoundKind.FCFS_SALE` shipped on 2026-07-18. First-come-
-first-served sales are exactly the case where "remind me 5 minutes before
-it opens" beats "remind me 3 hours before", so this is no longer
-speculative - it just has no user complaints behind it yet.
-
-Reinforced, not re-ranked, by the 2026-07-20 onboarding build: the welcome
-wizard's default-reminders step had to drop the demo's "30 minutes before"
-fine-tune option for the same reason (`PresetItem` has no minutes column),
-so the gap now visibly shows up in a second surface, not just FCFS sales.
-
-Re-reviewed 2026-07-20 (i18n build): whichever "N minutes before" copy this
-eventually ships (fine-tune option labels, sentence-style rule descriptions)
-will need both catalogues filled in alongside the schema/form work -- one
-more small addition to effort, not a reason to re-rank.
-
-Displaced to #2 on 2026-07-22 by the venue-to-tags build's import-preview
-regression, then returned to #1 the same day when that regression shipped as the
-import per-leg venue picker (phase 1 follow-up, see Shipped). Nothing about this
-entry changed; it is back on top because the thing that briefly outranked it is
-done, and it is now the highest-impact user-facing gap left standing.
-
-Re-reviewed 2026-07-23 (agent-import build): explicitly unchanged. The import
-seam touches concert creation, not reminder offsets, so nothing here moved --
-it stayed on top at the time, with the new Eventernote discovery entry placed
-under it for the reason given there. (The same evening's owner-priority batch
-then pushed both down by insertion -- position, not substance; the heading
-carries the current rank.)
-
-Displaced to #2 later the same day by the scrape-to-agent workflow, on merit and
-not by insertion: that entry is what makes the feature which just shipped pay
-off, while this one remains a proven-but-uncomplained-about gap.
-
-Back at #1 on 2026-07-31 by pure removal, when Eventernote discovery -- the
-entry that had passed it two days earlier -- shipped. Re-read against that build
-and unchanged in every respect: discovery lived in a parser, a fetch, the
-scheduler tick and an admin page, and touches neither `PresetItem` nor the
-sentence builders. Worth saying plainly, since this entry has now been displaced
-five passes running without once being judged less valuable.
-
-Back at #1 again on 2026-08-03 by pure removal, one pass after the
-onboarding-skip entry displaced it and one day after that entry was filed --
-the shortest displacement in this entry's history. Re-read against what shipped
-(one column on `User`, the OAuth callback's redirect decision, two template
-`<script>` blocks) and untouched in every respect. The number keeps moving; the
-reading has not changed once.
-
-Displaced to #2 on 2026-08-04 by the calendar-feed entry, the seventh
-displacement and the fastest yet -- one day at #1. By insertion on the new
-entry's merit (owner usage pain, four gaps at once), never on this one's:
-still untouched in substance, still never judged less valuable. One genuine
-point of contact worth naming rather than implying: FCFS sales are this
-entry's own strongest case, and a calendar rebuilt around the feed makes a
-"5 minutes before it opens" reminder MORE visible when it exists, not less --
-the two entries reinforce, they do not compete.
-
-Displaced to #3 hours later the same day by the opt-out suppression defect --
-the eighth displacement, and the first time this entry has moved twice in one
-day. Same verdict as the previous seven: position, never substance.
-
-Back to #2 the same night by pure removal, when that defect shipped -- three
-moves in one day, and the shortest displacement in this entry's history by a
-wide margin. Re-read against what shipped (read-surface filters and one data
-migration; nothing near `PresetItem`, the offset form or the sentence
-builders) and untouched in every respect. Ninth move, ninth time the reading
-has not changed.
-
-Back at #1 the next morning by pure removal, when the calendar-feed entry that
-displaced it the day before shipped -- the TENTH move, the FOURTH inside a
-single day, and the end of the seventh displacement, which outlasted the eighth
-by a matter of hours. Re-read against what shipped and untouched in substance
-as always, but this build is the first in the run to touch this entry's own
-argument rather than merely its number: a no-outcome round's OPENS moment is
-now an event on the user's calendar feed, so an FCFS sale's opening is
-something a reader SEES without owning a reminder rule for it. That is the
-reinforcement the seventh-displacement note above predicted, made concrete --
-the visible moment is exactly the one a days-and-hours offset can only remind
-you about too early, so the case for minutes is sharper than it was, and this
-entry is the highest-impact user-facing gap still standing.
-
-Displaced to #2 again late the same evening by the crawler-trap capture --
-the eleventh move, the FIFTH inside this single day, and the first time the
-thing that outranked it was an outage rather than a feature or a defect.
-Same verdict as every move before it: position, never substance.
-
-Back at #1 the same night by pure removal, when that capture shipped hours
-after it was filed -- the TWELFTH move and the SIXTH inside one day, which is
-the whole of this entry's 2026-08-04. Re-read against what shipped (link
-attributes in one template, a `/robots.txt` route, two runbook paragraphs) and
-untouched in every respect, as it has been through all twelve: position, never
-substance.
-
-Displaced to #2 on 2026-08-05 by the round-watch entry -- the THIRTEENTH
-move, by insertion on the new entry's merit, and the second time the thing
-that outranked it came from the correctness family rather than a feature: a
-reminder fired at a slightly-wrong offset degrades, but a round the ladder
-never learned about fires nothing at all, and only one of those failures is
-silent. Same verdict as the twelve before it: position, never substance.
-
-Held at #2 on 2026-08-06 by pure removal, when the phase-2 entry directly below
-it shipped -- the first time in this entry's history that a removal did NOT
-change its number, since everything that renumbered sat underneath it. Re-read against what shipped (a runner, a pure evidence checker, a
-host policy and an admin approval page; nothing within reach of `PresetItem`,
-the offset form or the sentence builders) and untouched in substance for the
-fourteenth consecutive pass. One thing worth naming rather than implying,
-because the two builds do touch: an AI-completed round can now carry an
-`apply_opens_jst` the editor never typed, which means the moment an FCFS sale
-opens is more often PRESENT in the data than it used to be -- and a moment
-present in the data is precisely the one a days-and-hours-only offset can only
-remind you about too early. That sharpens this entry's own strongest case
-again, exactly as the calendar-feed build did, without changing its rank.
-
-Displaced to #3 on 2026-08-06 by the two conversation-sourced entries inserted
-above -- the FOURTEENTH move, and the first caused by entries that ship nothing
-and deliver no feature at all. Same verdict as the thirteen before it.
-
-**Back at #1 on 2026-08-11 -- the FIFTEENTH move, and the first ever to arrive
-by three mechanisms at once.** The entry above it was DELETED (the calibration
-gate ran, and it shipped nothing, so it left the list rather than moving to
-Shipped); the entry above THAT shipped its cheapest shape; and the successor
-carrying that entry's two unshipped shapes was ranked BELOW this one on merit
-for the first time in their coexistence, because making the round-watch failure
-visible was, by its own filing, most of its value. Re-read against what shipped
-(one db feature module, one pure message builder, one admin page, one scheduler
-block) and untouched in substance for the fifteenth consecutive pass: nothing
-round watch built comes within reach of `PresetItem`, the offset form or the
-sentence builders. Position, never substance -- fifteen moves, fifteen
-identical verdicts.
-
-**HELD at #1 later the same day by outcome correction, which is the first pass
-to leave this entry alone by construction rather than by arithmetic**: that item
-was filed unranked while it was already on a branch, so it never occupied a
-place this entry could inherit or lose. Re-read against what shipped anyway (one
-service writer, one route, one template macro parameter, three Discord buttons)
-and untouched in substance for the sixteenth consecutive pass -- it deletes
-`RoundOutcome` rows and re-plans through `reinstate_user_rules`, which is the
-existing `sync_*` machinery unchanged, and `PresetItem` still has no minutes
-column. Sixteen passes, sixteen identical verdicts.
-
-**HELD at #1 again on 2026-08-12 by the demo-parity build, which is the first
-pass where the entry that shipped was ranked BELOW this one and its replacement
-was ranked below it too** -- a removal at #8 and an insertion at #17 cancel, so
-this entry did not move and could not have. Re-read against what shipped (one
-Preferences label and its two catalogue rows, one dialog footer moved out of its
-form, one CSS declaration on two selectors, and two demo files) and untouched in
-substance for the seventeenth consecutive pass. One point of contact worth
-naming rather than implying, since it is the closest this build came: the label
-that changed is Preferences' Auto-apply toggle, which sits in the same
-`.subrow` a minutes-capable rule would eventually have to render in -- but the
-change was one word of copy, not a control, and `PresetItem` still has no
-minutes column. Seventeen passes, seventeen identical verdicts.
-
-### 2. Franchise-aware round-label suggestions
+### 1. Franchise-aware round-label suggestions
 
 Impact: low-medium - effort: small, now that the phrase library exists. Raised:
 2026-07-22 (owner, during the phase 2 design discussion, and deferred by him in
@@ -1392,7 +1255,7 @@ own phrasing habits rather than by real editorial usage, so whoever builds the
 franchise ranking should look at what the counts actually contain before
 trusting the ORDER BY.
 
-### 3. Ten of eleven `RoundKind` members are purely cosmetic
+### 2. Ten of eleven `RoundKind` members are purely cosmetic
 
 Impact: low (code health, no user-visible change) - effort: medium. Raised:
 2026-07-22 (surfaced during i18n phase 2 design and deliberately not acted on).
@@ -1438,7 +1301,7 @@ data-driven refactor: this consumer is deliberately NOT the full set
 purpose), so a table generated blindly from the enum would silently re-offer
 them.
 
-### 4. Teach the discovery matcher a round-gap dimension
+### 3. Teach the discovery matcher a round-gap dimension
 
 Impact: low-medium (a proven, already-arriving signal, but narrow: it covers
 feed-covered franchises only, and it is the SMALL half of an entry that used
@@ -1482,7 +1345,7 @@ real, not hypothetical, but narrow (feed-covered franchises only), and the
 majority of what made the combined entry worth #2 was the automation that
 makes a quiet ladder actionable at all, which is the part that just shipped.
 
-### 5. In-app LLM extraction on the import page
+### 4. In-app LLM extraction on the import page
 
 Impact: low-medium - effort: medium, and ACTIONABLE as of 2026-08-05 (the
 budget block lifted). Raised and deliberately deferred 2026-07-22 (owner: no
@@ -1571,7 +1434,7 @@ these endpoints). Whoever eventually builds this should check the catalogue
 via that path before drafting rather than re-inventing a dedup query. Impact
 and rank unchanged; the dedup half of the eventual build just got an answer.
 
-### 6. Four long jobs share the reminder tick
+### 5. Four long jobs share the reminder tick
 
 Impact: low-medium -- no user-visible change today; it removes a false-alarm
 source and a latent outage class - effort: medium. Raised: 2026-08-06 (owner
@@ -1645,7 +1508,7 @@ this entry's secondary complaint ("every long job added since has had to
 remember it") reaching a SHORT job too. Held here as evidence for the entry,
 not as a reason to move it.
 
-### 7. PWA / installability
+### 6. PWA / installability
 
 Impact: low-medium - effort: medium. Raised: 2026-07-21 (mobile-view
 build).
@@ -1688,7 +1551,7 @@ AI-completed round is a deadline that reaches the user through the SAME
 channels as any other, so it raises the value of the interrupting half without
 altering what web push would have to build.
 
-### 8. The event classes outside concerts and talk shows
+### 7. The event classes outside concerts and talk shows
 
 Impact: low (by owner ruling) - effort: varies sharply per class. Raised:
 2026-08-02, filed by the scope ruling rather than proposed on merit.
@@ -1728,7 +1591,7 @@ this class's actual difficulty, is untouched. Release events stay the honest
 "may not be expressible at all": a completion pass that finds no deadline
 because there is none is not progress on them.
 
-### 9. A/B casts have nowhere to live
+### 8. A/B casts have nowhere to live
 
 Impact: low (descoped by consequence) - effort: small-to-medium, mostly design.
 Raised: 2026-08-01 (taxonomy read); filed 2026-08-02 by the scope ruling.
@@ -1759,7 +1622,7 @@ leg-label-shaped identity too, and a cast convention smuggled into a label would
 be reproduced by it as readily as by a skill. Same verdict either way -- the gap
 stays honest until stage runs come back into scope.
 
-### 10. Discover sort in the content head, plus the catalogue-count note
+### 9. Discover sort in the content head, plus the catalogue-count note
 
 Impact: low - effort: small. Raised: 2026-07-20 (demo-reconciliation
 re-review).
@@ -1798,7 +1661,7 @@ and an admin page, and never went near Discover, its sidebar, the filter sheet
 or the catalogue counts. Recorded only because this file's discipline is that a
 re-read leaves a mark whether or not it found anything.
 
-### 11. Name the destination on the sign-in bounce
+### 10. Name the destination on the sign-in bounce
 
 Impact: low - effort: small. Raised: 2026-07-21 (signed-out redirect build).
 
@@ -1833,7 +1696,7 @@ renders through Jinja's escaping as ordinary content, never into an `on*`
 handler or an inline script (invariant 7). Different surface, same rule,
 already followed.
 
-### 12. The calendar roster's blind spots
+### 11. The calendar roster's blind spots
 
 Impact: low - effort: one half is trivial, the other is a design change.
 Raised: 2026-08-03, filed by the calendar-discovery build's own probe rather
@@ -1896,7 +1759,7 @@ but it does mean the second half of this entry ("promoter-named rounds are
 unreachable by prefix, and always will be") is now routed around rather than
 merely tolerated, which is a further argument for leaving it at `low`.
 
-### 13. Two narrow edges outcome correction left open
+### 12. Two narrow edges outcome correction left open
 
 Impact: low (both are rare, and one is copy rather than state) - effort: small
 for each, and they are independent. Raised: 2026-08-11 (outcome-correction
@@ -1935,7 +1798,7 @@ outranks an admin inconvenience. Neither is worth a branch of its own -- (b) in
 particular is one string and one condition, and belongs in whatever next touches
 `_progress_reply`.
 
-### 14. Nothing caps the discovery review path
+### 13. Nothing caps the discovery review path
 
 Impact: low (admin-only) - effort: small. Raised: 2026-07-31 (Eventernote
 discovery, Task 7 review; deferred as a minor at the time).
@@ -2017,7 +1880,7 @@ stops matching the day after a show, so rows leave without anybody dismissing
 them. That is the opposite of the discovery queue's unbounded growth, which is
 the property that made this entry worth filing.
 
-### 15. Nothing notices a calendar feed going quiet
+### 14. Nothing notices a calendar feed going quiet
 
 Impact: nil for users, real for the catalogue - effort: small. Raised:
 2026-08-03 (calendar-discovery build; the design doc listed per-feed health as
@@ -2089,7 +1952,7 @@ in `delivery_log` like any other). A per-feed "last future row seen" line is
 still the right first version; what changed is that going further is no longer
 over-built, because the machinery to copy already exists.
 
-### 16. `db/core.py` is one mutually-recursive 4,000-line component
+### 15. `db/core.py` is one mutually-recursive 4,000-line component
 
 Impact: nil for users, real for anyone changing the reminder engine - effort:
 large. Raised: 2026-08-07 (the service.py split; this is the part that
@@ -2121,7 +1984,7 @@ own merits; the file size is a symptom, not the reason.
 
 Do not attempt this as a tidy-up. The engine is the product.
 
-### 17. The demos are one grammar-migration behind the app
+### 16. The demos are one grammar-migration behind the app
 
 Impact: nil for users, real for anyone doing UI work against the design source
 of truth - effort: medium, and it wants its own bounded pass rather than being
@@ -2168,13 +2031,13 @@ the demos' shared utility classes against the stylesheet ONCE rather than one
 class at a time. That last step is what makes this a migration rather than a
 fix, and it is why the effort reads medium rather than small.
 
-**Ranked #17, and the honest case against ranking it higher is that this is a
+**Ranked #16, and the honest case against ranking it higher is that this is a
 documentation-quality problem with no user-visible impact whatever.** Nothing
 renders wrong for anyone; each demo is self-consistent and looks right. It sits
 above the agent-skills entry beneath it because that one is convenience for a
 workflow that already works, while this one actively misleads -- a reader who
 takes the demo at its word about `.banner` learns a component that does not
-exist. It sits below `db/core.py` (#16) because a stale reference costs an
+exist. It sits below `db/core.py` (#15) because a stale reference costs an
 assumption a reader can overturn by opening `style.css`, whereas that entry's
 shape constrains the engine, and the engine is the product. And it goes no
 higher than this band because the cost, while real and now twice-paid, is
@@ -2216,7 +2079,7 @@ found by a reviewer checking a demo string against the app's source, and none of
 them was found by anyone reading the demo. A reference nobody can check by
 reading is exactly the failure this entry describes.
 
-### 18. Teach `add-concert` / `triage-leads` to use the agent read API
+### 17. Teach `add-concert` / `triage-leads` to use the agent read API
 
 Impact: nil for tracked users, real for the owner's own workflow -- effort:
 small (skill-file prompt/instruction edits; no app code, the API already
@@ -2257,7 +2120,7 @@ input that should arrive through the read API rather than a paste:
 page's predicate reuses, so an agent can compute the worklist itself. That is
 this entry's proposal, with a second concrete use.
 
-### 19. Agent write endpoints
+### 18. Agent write endpoints
 
 Impact: potentially high, longer-term -- it would close the loop the read
 API opened -- but explicitly NOT ACTIONABLE today, and gated on evidence
@@ -2302,7 +2165,7 @@ amend one (import answers 409 for a concert that already exists, invariant 6),
 so "let an agent add a round to a concert the catalogue already has" is a
 different endpoint from anything discussed here.
 
-### 20. An MCP server in front of the agent read API
+### 19. An MCP server in front of the agent read API
 
 Impact: low -- a convenience wrapper around a capability that already
 exists, not a new capability - effort: small-medium, and explicitly not
@@ -2325,7 +2188,7 @@ pointer now is). Worth a fresh look if the raw
 HTTP ergonomics prove genuinely annoying inside Claude Code in practice;
 nothing so far says they do, so this stays logged rather than built.
 
-### 21. A lone character on `/tags` renders as a plain chip, not a split pill
+### 20. A lone character on `/tags` renders as a plain chip, not a split pill
 
 Impact: nil today, real the day it stops being nil -- effort: not a one-word
 fix. Raised: 2026-08-12, filed as a deferred note inside the Following-rework
@@ -2353,11 +2216,11 @@ as-is would silently drop them. Whoever picks this up needs a variant that
 keeps the count `member_chip` currently omits, not a one-line call swap.
 
 Ranked at the bottom, below the MCP server entry, on the same self-announcing
-logic #17 uses: the failure mode is a missing UI element on a page an editor
+logic #16 uses: the failure mode is a missing UI element on a page an editor
 is looking directly at, not a silent data or reminder-timing error, and it
 costs nothing until the precondition (an ungrouped character) exists.
 
-### 22. An ops check for a stale round poll
+### 21. An ops check for a stale round poll
 
 Impact: low (protects a pass that is `ROUND_POLL_ENABLED`-gated off by
 default in production today, so its cost is zero until the day that flag
@@ -2386,7 +2249,7 @@ day can safely stay quiet -- which is the whole point of the empty-digest
 design -- because something else is now watching the one signal that design
 depends on.
 
-### 23. Round poll's one remaining known gap: a doubled proposal over-counts the tally
+### 22. Round poll's one remaining known gap: a doubled proposal over-counts the tally
 
 Impact: low (`ROUND_POLL_ENABLED` still defaults off, and even switched on
 this is a digest COUNT reading one candidate too high on a specific
@@ -2435,7 +2298,7 @@ first call, in the same run), so it counts as new again. A model repeating
 itself within one reply reports "2 new proposals" for a database that gained
 one row.
 
-### 24. Round poll: an edited opening time can create a label-duplicate neither refusal catches
+### 23. Round poll: an edited opening time can create a label-duplicate neither refusal catches
 
 Impact: low today (needs a specific combination: a genuinely-new proposal, an
 admin who edits its opening time on the draft page, AND a concert that
@@ -2481,7 +2344,7 @@ judgement call for the owner, not a predicate this pure diff can make on its
 own.
 
 **Revision-pass note (2026-08-14, round poll phase 2 -- full pass required by
-CLAUDE.md's WISHLIST rule after every shipped feature):** **[Numbers below are as written on that date. The 2026-08-18 pass shipped the test-tooling entry that was #23, so what these paragraphs call #24 and #25 are #23 and #24 today.]** old-#2's LARGE
+CLAUDE.md's WISHLIST rule after every shipped feature):** **[Numbers below are as written on that date. TWO passes have renumbered since: 2026-08-18 shipped the test-tooling entry that was #23, and 2026-08-19 shipped minute-level offsets out of #1, which moved every entry below it up by one. What these paragraphs call #24 and #25 are #22 and #23 today.]** old-#2's LARGE
 shape moves to Shipped in full (below, both phases); its small shape is
 re-ranked on its own merits per this pass's own brief rather than left
 inheriting old-#2's rank, landing at #4 (low-medium impact, small effort,
@@ -2515,12 +2378,12 @@ rather than left implicit, per the instruction that a revision pass leaving
 no trace is indistinguishable from one that never happened.
 
 **Revision-pass note (2026-08-13, round poll phase 1 -- full pass required by
-CLAUDE.md's WISHLIST rule after every shipped feature):** **[Numbers below are as written on that date. The 2026-08-18 pass shipped the test-tooling entry that was #23, so what these paragraphs call #24 and #25 are #23 and #24 today.]** one entry updated
+CLAUDE.md's WISHLIST rule after every shipped feature):** **[Numbers below are as written on that date. TWO passes have renumbered since: 2026-08-18 shipped the test-tooling entry that was #23, and 2026-08-19 shipped minute-level offsets out of #1, which moved every entry below it up by one. What these paragraphs call #24 and #25 are #22 and #23 today.]** one entry updated
 in place (#2, above -- NOT moved to Shipped, since phase 2 of the large shape
 and the small shape both remain open; old #2 -- round poll's large shape
-shipped in full 2026-08-14, its small shape stands alone as #4 today, and #2
-now names a different entry entirely, "Franchise-aware round-label
-suggestions"), three entries appended (#22-#24, above), one Shipped entry
+shipped in full 2026-08-14, its small shape stands alone as #3 today, and #2
+no longer names it -- "Franchise-aware round-label suggestions" took that
+number and is #1 as of 2026-08-19), three entries appended (#22-#24, above), one Shipped entry
 added (below), no other entry re-ranked. The
 twenty entries besides #2 were re-read against this build specifically, not
 skimmed, and the shared answer is that a flag-gated daily pass reading
@@ -2708,7 +2571,11 @@ trace is indistinguishable from one that never happened.
 deliberately. The 2026-08-12 demo-parity pass then shipped #8 and inserted one
 entry at #17, so against the list as it stands now read #14→#13, #17→#16 and
 #19→#19; #8 is no longer a number at all -- it is the demo-parity cosmetics entry
-in Shipped. Every number at or below #7 means the same entry it did then.)
+in Shipped. Every number at or below #7 means the same entry it did then.
+**The 2026-08-19 minute-offsets pass then shipped #1 itself**, which moved every
+remaining entry up by one, so subtract one more from every "as it stands now"
+number in this parenthetical: #13→#12, #16→#15, #19→#18, and likewise for the
+numbers at or below #7.)
 
 **Revision-pass note (2026-08-11, full pass required by CLAUDE.md's WISHLIST
 rule after every shipped feature):** the five entries round watch genuinely
@@ -2744,7 +2611,9 @@ the same entry it did then. **The 2026-08-12 demo-parity pass then shipped this
 paragraph's #8 and inserted one entry at what is now #17**, so against the list
 as it stands TODAY the chain above resolves to #14→#14, #15→#15, #16→#16, #17→#18
 and #18→#19; this paragraph's #8 is in Shipped; its #9-#13 are #8-#12 now; and
-its #1-#7 still mean what they did.)
+its #1-#7 still mean what they did. **The 2026-08-19 minute-offsets pass then
+shipped #1 itself**, so subtract one more from every resolved number above:
+#14→#13, #15→#14, #16→#15, #17→#17, #18→#18, #9-#13→#7-#11, and #2-#7→#1-#6.)
 
 **Revision-pass note (2026-08-08, full pass required by CLAUDE.md's
 WISHLIST rule after every shipped feature):** every remaining entry (#3-#5,
@@ -2772,6 +2641,127 @@ which added `Tag.eventernote_url` and wired it onto the concert page's
 performer chips - see its Shipped entry below.)
 
 ## Shipped
+
+### Minute-level reminder offsets (2026-08-19)
+
+Branch `minute-offsets`, nine tasks, design
+`docs/superpowers/specs/2026-08-19-minute-offsets-design.md`, plan
+`docs/superpowers/plans/2026-08-19-minute-offsets.md`, migration
+`df9ab274c0f7` (`reminder_rules.offset_minutes` and
+`preset_items.offset_minutes`; additive only, so no `drop_constraint` and
+none of CLAUDE.md's legacy-anonymous-constraint hazard). Deploy takes
+`alembic upgrade head`, not the plain restart. **This was Proposed #1 for
+seventeen recorded moves across a month** -- displaced eight times, returned
+to the top nine, once moving three times in a single day -- and the verdict
+written into every one of those notes was the same: position, never
+substance. Nobody ever ranked it lower; other things simply arrived and
+shipped faster.
+
+**What a user can now do.** Type an exact `h:mm` in the second box of a
+reminder sentence -- `0:05`, `0:30`, `1:30` -- on Preferences' preset editor
+and on the concert page's own add-a-rule form, both of which previously
+offered a whole-hours dropdown and nothing finer. `/remindme` gains an
+optional `minutes_before` (0-1439) beside `days_before`, carried over into
+hours where it exceeds 59, and its confirmation reads the stored offset back
+rather than re-deriving it. The welcome wizard's fine-tune list gains
+*5 minutes* and *30 minutes*. The case that made this urgent is
+`RoundKind.FCFS_SALE` (2026-07-18): a first-come-first-served sale is exactly
+where "remind me 5 minutes before it opens" beats "3 hours before", and by
+2026-08-06 the AI completion pass had made an `apply_opens_jst` more often
+PRESENT in the data than it used to be, so the moment a days-and-hours offset
+could only warn about too early was increasingly a moment the app actually
+knew.
+
+**Three owner rulings (2026-08-19), all three of which narrowed the build.**
+*The boxes stay*: the design opened by recommending a single named-duration
+list -- the shape both demos use -- and that was rejected outright; the
+two-box sentence is the shape he wants, so the days `<select>` is untouched
+and only its neighbour changed. *The second box becomes an HH:MM text box*,
+not a third box and not a 29-entry `<select>`: free-form `h:mm` with native
+`pattern` validation, no JS, and a value that slips past the pattern answers
+422 exactly the way `form_url` does for a bad URL. *The wizard's sub-hour
+options ship in this build* rather than being filed for later, which is what
+turned a schema-plus-one-form change into a four-surface one.
+
+**The bug this closed was not in the entry, and had nothing to do with
+minutes.** Every surface that DESCRIBED a rule read `offset_days` alone. So a
+rule at "3 hours before" -- perfectly expressible before this build, and
+sitting in production -- rendered as **Same day** on the concert page
+(`_rules.html`) and as `same-day` in `/myreminders`. Two surfaces, wrong in
+the same way, independently, because each had grown its own three-line
+describer. Both now call `describe_offset` (`app/offsets.py`), which is the
+real reason there is ONE describer and not a helper per shell: a second copy
+is precisely how the first two came to disagree with the database. Found
+while exploring the data model, fixed in the same build, and recorded here
+because a user-visible misreport belongs in this file whether or not anyone
+filed it.
+
+**The trap, written down because nothing would have reported it.**
+`apply_preset` (`db/core.py`) dedupes on a tuple so that re-applying a preset
+does not duplicate rules. That tuple was `(anchor, offset_days,
+offset_hours)`. Add a column and forget it, and two preset items differing
+ONLY in minutes collide: "30 minutes before closes" beside "at closes" gives
+one rule, the second is skipped with no error, no log and no UI difference,
+and the reminder simply never fires. That pair is the exact preset an FCFS
+sale wants, so the failure would have arrived on the feature's own happy
+path. It is now `(anchor, offset_days, offset_hours, offset_minutes)`, with a
+comment naming the trap, a test that creates both items and asserts TWO
+rules, and an entry in `docs/architecture.md` under `db/core.py`. The
+mutation that test must not survive is dropping a field from either tuple.
+
+**Canonical form, and why no backfill runs.** Anything under a day is stored
+decomposed -- `hours = total // 60`, `minutes = total % 60` -- one
+representation only, so every existing row (whole hours, minutes 0) is
+already canonical and the migration adds columns and stops. All three offsets
+carry the SAME sign; direction remains not-a-column, and `describe_offset`
+derives before/after from the sign rather than taking a `direction` argument,
+because two sources for one fact is how a caller comes to render a reminder
+pointing the wrong way.
+
+**The wizard's wire encoding widened, and the concert page's field names
+changed.** `OFFSET_OPTIONS`' `"days:hours"` value became
+`"days:hours:minutes"`, and `create_preset_from_rules`' rule tuples and
+`PRESET_TEMPLATES` widened with it -- a template value that cannot compose
+into an `OFFSET_OPTIONS` value makes the server-rendered `<select>` select
+nothing and silently fall back to "when", so the three had to move together.
+The wizard KEEPS its curated list rather than adopting the editor's HH:MM
+box, deliberately: onboarding offers a short list of good answers, the editor
+is where an exact one gets typed. On the concert page,
+`POST /concerts/{event_id}/rules` now takes `days` + `time` where it took a
+single `days_before` number input; there is no other caller, but a bookmarked
+form post from before this build will land on the defaults rather than 422.
+
+**The onboarding demo was one array behind the app, in both directions.**
+`docs/superpowers/demo/dekimasen-onboarding-demo.html`'s `OFFSETS` list
+carried `30 minutes` the app could not express (no minutes column) and was
+MISSING `6 hours`, which the app has offered for a while and nobody carried
+back. Per CLAUDE.md's rule that a deliberately-moved design moves its demo
+with it, the array now mirrors `OFFSET_OPTIONS` exactly -- `5 minutes` and
+`6 hours` added, order matched -- with a comment naming the file it mirrors.
+This is the demo-parity build's own lesson arriving again: **a cosmetic list
+is a set of claims about the app, and claims decay.**
+
+**The copy cost, paid knowingly.** The preset sentence's msgid changed from
+`Remind me {days} day(s) {hours} hour(s) {direction} each {anchor}.` to
+`... {time} ...`, because the unit now lives in what the user types. Editing
+English copy loses that msgid's translations by construction (CLAUDE.md,
+invariant on catalogues), so both were rewritten by hand along with eight
+other new msgids -- nine in ja and nine in zh. One of them is a JOINER,
+`{first} {second}`, translatable on purpose: English needs the space in
+"1 hour 30 minutes" and ja/zh must not have it, since「1時間 30分」reads as two
+fragments where「1時間30分」reads as one duration. `tests/test_i18n_catalogues.py`
+is what makes any of this fail loudly rather than silently.
+
+**Revision pass:** one removal (this entry), no insertion, no re-rank on
+merit -- recorded in full in the note at the head of Proposed. Old #2-#24
+renumber to #1-#23 by removal alone. All twenty-three were re-read against
+this build; #2 (the cosmetic `RoundKind` members) and #16 (the demos'
+grammar migration) were read closely because they look adjacent and are not,
+and both stand as written. Six live pointers were corrected in place rather
+than left to rot, and the tail's two number-translation parentheticals gained
+the subtraction this pass causes. `README.md` gained its line;
+`docs/architecture.md` gained an `app/offsets.py` entry and the dedupe-tuple
+warning under `db/core.py`; `CLAUDE.md`'s layout list gained the module.
 
 ### The suite runs in parallel by default (2026-08-18)
 
@@ -2836,7 +2826,7 @@ Branch `round-poll`, six tasks, spec
 `concerts.ladder_polled_at_utc`). This was Proposed old-#2's LARGE shape,
 phase 1 of it (old-#2, "Round watch: the two shapes it did not ship" -- the
 large shape completed in phase 2 below, 2026-08-14, and the small shape now
-stands alone as #4).
+stands alone as #3).
 
 **What it does.** A `ROUND_POLL_ENABLED`-gated daily pass (off by default)
 consumes round watch's own `quiet_ladder_rows` as its candidate list, re-reads
@@ -2888,7 +2878,7 @@ touches `ladder_rechecked_at_utc`, the OWNER's own stamp that orders
 worklist attended); and its digest DM is sent even on an empty run, the one
 deliberate departure from the discovery and quiet-ladder digests, because
 absence of a run report is the only thing that tells a broken pass apart from
-a healthy quiet one -- WISHLIST #22 above exists because nothing yet watches
+a healthy quiet one -- WISHLIST #21 above exists because nothing yet watches
 for that absence.
 
 `docs/architecture.md` gained the Round poll entry cited throughout; `CLAUDE.md`'s
@@ -2907,7 +2897,7 @@ Branch `round-poll-phase-2` (no PR yet), six tasks, spec
 `payment_deadline_at_utc`, `applies_to_labels`; zero rows to backfill, since
 `ROUND_POLL_ENABLED` has never been on in production). This completes
 old-#2's LARGE shape -- see the phase-1 Shipped entry above for what that
-shape's own findings were, and #4 above for the small shape it was always
+shape's own findings were, and #3 above for the small shape it was always
 paired with and never touches.
 
 **What it does.** Phase 1 could only tell you a round changed; phase 2 lets
@@ -2956,13 +2946,14 @@ identical rounds on one concert with `sync_concert` dutifully arming
 reminders for both: this feature's own failure mode, reached through its own
 happy path.
 
-Two of round poll phase 1's own known gaps (WISHLIST #23 above -- filed as
-#24, renumbered 2026-08-18 when the test-tooling entry shipped)
+Two of round poll phase 1's own known gaps (WISHLIST #22 above -- filed as
+#24, renumbered twice since: 2026-08-18 when the test-tooling entry shipped,
+and 2026-08-19 when minute-level offsets left #1)
 close with this build: a round whose closing time alone moved is now
 surfaced rather than dropped, and a proposal whose round is later added by
 hand now resolves itself for the same render-time-derivation reason above.
 The third (a doubled proposal in one LLM reply over-counting the digest
-tally) is unrelated to phase 2's scope and remains open, in #23 above.
+tally) is unrelated to phase 2's scope and remains open, in #22 above.
 `ROUND_POLL_ENABLED` still defaults off; nothing in this build changes that.
 
 ### Following is due a rework: the four-phase build (2026-08-13)
@@ -3099,7 +3090,7 @@ column to tell the two NULLs apart. Both `POST /subscriptions/{id}/notify` and
 caller, not merely left unreachable -- `/subscriptions/{id}/settings` already
 covers the same two fields less ambiguously.
 
-**One deferred gap survives all four phases and is now its own entry, #21
+**One deferred gap survives all four phases and is now its own entry, #20
 above**: a character with no group renders as a plain chip on `/tags`, not a
 split pill, because "Performers with no group" calls `tag_chip` rather than
 `member_chip`. Zero live instances (every one of the 318 CHARACTER tags is in
@@ -3231,7 +3222,7 @@ exactly the class it was fixing: an invented `1 on sale` fold chip naming a stat
 asserted something their own diff did not contain** -- caught, both times,
 because review here checks the diff and not the report.
 
-**One thing was deferred out on purpose and is now Proposed #17:** the demos are
+**One thing was deferred out on purpose and is now Proposed #16:** the demos are
 one grammar-migration behind the app. Their `.banner` is a pre-G2 top concept-bar
 sharing a class name with the app's G2 callout, and two separate tasks each had
 to work around it with a compound rule. That is a migration, not polish, and
@@ -3335,7 +3326,10 @@ backfill). This was Proposed #2 -- and #1 on impact for its whole life, the
 gate above it delivering nothing to anyone -- filed 2026-08-05 at the end of
 the first full triage session with its evidence still warm. **It ships the
 CHEAPEST of the three shapes that entry recorded, and only that one.** The
-other two are re-filed as Proposed #2 above and remain wanted.
+other two are re-filed as one Proposed entry above -- named rather than
+numbered, since it has been renumbered three times since: round poll shipped
+its large shape across both phases, and what remains is the discovery-matcher
+round-gap dimension, #3 today.
 
 **The problem, kept verbatim because the successor entry points here for it.**
 Discovery's sweep answers "what exists that you are not tracking"; NOTHING

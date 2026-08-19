@@ -91,6 +91,17 @@ measurement or an incident that a reasonable-looking edit would undo.
     recursive (measured: one strongly-connected component in the call graph),
     so no cut through them produces modules that import in one direction.
     Splitting it needs a design change, not a file move — see WISHLIST.md.
+    **`apply_preset`'s `have`/`key` tuples must name EVERY offset column.**
+    The dedupe that stops a re-applied preset creating duplicate rules is a
+    set of `(anchor, offset_days, offset_hours, offset_minutes)`; omit one
+    field and two preset items differing only in it collide, so the second is
+    skipped with no error, no log and no user-visible sign — the rule simply
+    never exists. `offset_minutes` (2026-08-19) is the newest and so the
+    easiest to forget, and "30 minutes before closes" beside "at closes" is
+    the exact pair a preset for an FCFS sale wants. The test that pins this
+    creates a preset holding both items and asserts TWO rules; the mutation it
+    must not survive is dropping a field from either tuple. Any offset column
+    added after this inherits the same obligation.
   - `tags.py` — the tag catalogue, membership and slug minting
     (`create_tag_row`/`assign_tag_slug`, invariant 3's single construction
     path). `venues.py` — the legs→concert VENUE rollup, and the one module
@@ -1904,6 +1915,46 @@ measurement or an incident that a reasonable-looking edit would undo.
   cookie); the OAuth callback (`web/auth.py`) seeds the column from the
   cookie, but ONLY at account creation, since the column can't otherwise
   distinguish "defaulted to en" from "chose en".
+- `src/app/offsets.py` — shipped 2026-08-19 with minute-level offsets
+  (WISHLIST #1), design in
+  `docs/superpowers/specs/2026-08-19-minute-offsets-design.md`. Three
+  functions and nothing else: `parse_hhmm` (the editor box's `h:mm` text into
+  `(hours, minutes)`), `format_hhmm` (back out, so a saved rule reads as
+  typed) and `describe_offset` (the translated phrase for a stored offset).
+  - **It sits beside `i18n.py`, NOT in `domain/`, and that is the whole
+    placement argument**: `describe_offset` calls `gettext`/`ngettext`, and no
+    `domain/` module imports `app.i18n` — that package is pure logic with no
+    I/O, and gettext does file I/O at first use. Splitting the pure half
+    (`parse_hhmm` is five lines of regex) into `domain/` and leaving the
+    phrase up here was considered and rejected: two homes for one round trip
+    (parse, store, format, describe) costs the reader more than the purity
+    buys. Move the parse down there and you must move the whole round trip's
+    tests with it, and expect to have this argument again.
+  - **`describe_offset` derives before/after from the SIGN and takes no
+    `direction` argument.** Every write path already stores `sign * days,
+    sign * hours, sign * minutes` — direction is not a column — so a
+    `direction` parameter would be a second source for one fact, and the
+    caller that disagreed with the database would render a reminder pointing
+    the wrong way with nothing raising.
+  - **It renders the two largest non-zero units, and the JOINER between them
+    is a msgid.** `_("{first} {second}")` is translatable for the same reason
+    the sentence patterns in `preferences.html` are: the space is an English
+    typesetting rule, not a universal one. ja and zh translate it to the same
+    two slots with NOTHING between them —「1時間30分」reads as one duration
+    where「1時間 30分」reads as two fragments. Do not "simplify" it back to a
+    hardcoded `" ".join`.
+  - **`format_hhmm` drops the sign on purpose** (it `abs()`es both arguments).
+    That is right for its one caller, the editor box, which shows a magnitude
+    with direction picked in a separate control — but hand it a signed pair of
+    the kind `describe_offset` takes and the sign is gone with no complaint.
+  - **What it closed, beyond minutes.** Before this, `_rules.html` and
+    `/myreminders` each described a rule from `offset_days` alone, so a live
+    "3 hours before" rule rendered as "Same day" on the concert page and
+    `same-day` in Discord. That misreport predated minutes entirely and was in
+    production; routing both surfaces through `describe_offset` is what fixed
+    it, and it is the reason there is ONE describer rather than a helper per
+    shell — two of them is exactly how the two surfaces came to be wrong in
+    the same way independently.
 - Bot and web NEVER contain business logic; they call `db/service.py` — which
   is still literally true after the split, because that module is the facade
   re-exporting the whole layer (see the `src/app/db/` entry above). Keep
