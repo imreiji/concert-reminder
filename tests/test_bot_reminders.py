@@ -267,7 +267,7 @@ async def test_remindme_carries_minutes_over_into_hours(db):
     async with db() as s:
         rule = (await s.execute(select(ReminderRule))).scalar_one()
     assert (rule.offset_days, rule.offset_hours, rule.offset_minutes) == (-1, -1, -30)
-    assert "1 day 1 hour before" in interaction.response.sent["args"][0]
+    assert "1 day 1 hour 30 minutes before" in interaction.response.sent["args"][0]
 
 
 async def test_myreminders_describes_an_hours_rule_as_hours(db):

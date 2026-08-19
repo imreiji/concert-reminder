@@ -58,9 +58,15 @@ def format_hhmm(hours: int, minutes: int) -> str:
 def describe_offset(days: int, hours: int, minutes: int) -> str:
     """One translated phrase for a stored, SIGNED offset.
 
-    "Same day" for a zero offset; otherwise the two largest non-zero units,
-    e.g. "3 days 6 hours before", "1 hour 30 minutes before", "30 minutes
+    "Same day" for a zero offset; otherwise ALL non-zero units, e.g. "3 days
+    6 hours 45 minutes before", "1 hour 30 minutes before", "30 minutes
     before". Direction comes from the sign, never from an argument.
+
+    Renders every unit, not just the two largest: this is a minute-level
+    feature, and a description that silently drops the minutes (e.g. "1 day
+    1 hour before" for a rule that actually fires 1 day 1 hour 30 minutes
+    before) misreports the very precision the feature exists to offer, even
+    though the stored offset -- and so the fire time -- was always correct.
     """
     d, h, m = abs(days), abs(hours), abs(minutes)
     if (d, h, m) == (0, 0, 0):
@@ -80,12 +86,16 @@ def describe_offset(days: int, hours: int, minutes: int) -> str:
     # must NOT have it -- 「1時間 30分」/「1小时 30分钟」 reads as two fragments
     # rather than one duration. Their msgstrs are the same two slots with
     # nothing between them.
-    pair = parts[:2]
-    quantity = (
-        _("{first} {second}").format(first=pair[0], second=pair[1])
-        if len(pair) == 2
-        else pair[0]
-    )
+    #
+    # ALL non-zero parts render, not just the largest two -- folded left to
+    # right through the same two-slot joiner, so three units nest as
+    # "{first two} {third}": "3 days 6 hours" then "3 days 6 hours 45
+    # minutes". English keeps a single space throughout because the joiner's
+    # own msgstr is unconditionally "{first} {second}"; ja/zh get no space
+    # anywhere in the fold for the same reason.
+    quantity = parts[0]
+    for part in parts[1:]:
+        quantity = _("{first} {second}").format(first=quantity, second=part)
     after = days > 0 or hours > 0 or minutes > 0
     pattern = _("{quantity} after") if after else _("{quantity} before")
     return pattern.format(quantity=quantity)

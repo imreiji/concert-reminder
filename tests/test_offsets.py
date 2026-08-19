@@ -51,16 +51,17 @@ def test_format_hhmm_round_trips_what_the_box_shows():
         (-3, -6, 0, "3 days 6 hours before"),
         (0, 0, 15, "15 minutes after"),
         (1, 0, 0, "1 day after"),
-        (-3, -6, -45, "3 days 6 hours before"),
-        (2, 1, 30, "2 days 1 hour after"),
+        (-3, -6, -45, "3 days 6 hours 45 minutes before"),
+        (2, 1, 30, "2 days 1 hour 30 minutes after"),
     ],
 )
 def test_describe_offset(days, hours, minutes, expected):
-    """The last two cases have three non-zero units, so they pin "the two
-    LARGEST units" as an actual behaviour: they kill the mutant that swaps
-    `parts[:2]` for `parts[-2:]`, which every earlier (<=2-unit) case cannot
-    tell apart from correct code -- that mutant would render (-3, -6, -45) as
-    "6 hours 45 minutes before" instead of "3 days 6 hours before"."""
+    """The last two cases have three non-zero units, so they pin "ALL non-zero
+    units, not just the two largest" as an actual behaviour: they kill the
+    mutant that drops the smallest unit again, e.g. slicing to `parts[:2]`
+    (or `parts[-2:]`), which every earlier (<=2-unit) case cannot tell apart
+    from correct code -- that mutant would render (-3, -6, -45) as "3 days 6
+    hours before" instead of "3 days 6 hours 45 minutes before"."""
     set_locale("en")
     assert describe_offset(days, hours, minutes) == expected
 
@@ -85,12 +86,13 @@ def test_describe_offset(days, hours, minutes, expected):
         ("zh", 0, 0, 15, "15分钟后"),
         ("zh", -3, 0, 0, "3天前"),
         ("zh", 1, 0, 0, "1天后"),
-        # Two units: the joiner is translatable, and CJK does not space
-        # between them.
+        # Multiple units: the joiner is translatable, and CJK does not space
+        # between them, including when the fold runs twice for three units
+        # (zh below).
         ("ja", 0, -1, -30, "1時間30分前"),
         ("ja", -3, -6, 0, "3日6時間前"),
         ("zh", 0, -1, -30, "1小时30分钟前"),
-        ("zh", 2, 1, 30, "2天1小时后"),
+        ("zh", 2, 1, 30, "2天1小时30分钟后"),
         # The zero offset takes its own msgid and never reaches either.
         ("ja", 0, 0, 0, "当日"),
         ("zh", 0, 0, 0, "当天"),

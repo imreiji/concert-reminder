@@ -1943,13 +1943,23 @@ measurement or an incident that a reasonable-looking edit would undo.
     `direction` parameter would be a second source for one fact, and the
     caller that disagreed with the database would render a reminder pointing
     the wrong way with nothing raising.
-  - **It renders the two largest non-zero units, and the JOINER between them
-    is a msgid.** `_("{first} {second}")` is translatable for the same reason
-    the sentence patterns in `preferences.html` are: the space is an English
+  - **It renders ALL non-zero units, and the JOINER between them is a
+    msgid.** `_("{first} {second}")` is translatable for the same reason the
+    sentence patterns in `preferences.html` are: the space is an English
     typesetting rule, not a universal one. ja and zh translate it to the same
     two slots with NOTHING between them —「1時間30分」reads as one duration
     where「1時間 30分」reads as two fragments. Do not "simplify" it back to a
-    hardcoded `" ".join`.
+    hardcoded `" ".join`. Three (or more) units FOLD through that same
+    two-slot joiner left to right rather than adding a second pattern:
+    "3 days 6 hours" then, joined again with "45 minutes", "3 days 6 hours
+    45 minutes" — so ja/zh get no space anywhere in the fold, and English
+    gets one space throughout. This shipped 2026-08-19, after the original
+    two-largest-only rule shipped and was found, on review, to make the
+    confirmation for `/remindme days_before=1 minutes_before=90` read "1 day
+    1 hour before" for a rule that actually fires 1 day 1 hour 30 minutes
+    before — the fire time was always correct, but in a feature whose whole
+    point is minute-level precision, silently truncating the one line that
+    reports it back to the user was the wrong default.
   - **`format_hhmm` drops the sign on purpose** (it `abs()`es both arguments).
     That is right for its one caller, the editor box, which shows a magnitude
     with direction picked in a separate control — but hand it a signed pair of

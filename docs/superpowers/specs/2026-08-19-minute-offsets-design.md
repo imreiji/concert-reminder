@@ -139,3 +139,24 @@ is untouched.
 WISHLIST #1 to Shipped with a full re-rank; a README line, since this one IS
 user-facing; `docs/architecture.md` entries for `app/offsets.py` and for the
 dedupe-tuple trap; a CLAUDE.md layout line for the new module.
+
+## 2026-08-19 addendum: render ALL non-zero units, not just the two largest
+
+`describe_offset` as designed and shipped above renders only the two
+largest non-zero units (`parts[:2]`). After the whole-branch review the
+owner changed this: a three-unit offset now renders all three, e.g.
+`describe_offset(-3, -6, -45)` reads "3 days 6 hours 45 minutes before"
+instead of "3 days 6 hours before". Two-unit and one-unit offsets are
+unchanged, and the `{first} {second}` joiner is unchanged too — three units
+fold through it twice ("3 days" + "6 hours" -> "3 days 6 hours", then that
+result + "45 minutes") rather than growing a second msgid.
+
+Why: the fire time was always correct regardless of this bug, but the
+description is the user's only receipt for what they typed, and this is a
+minute-level-precision feature. `/remindme days_before=1
+minutes_before=90` stores `(-1, -1, -30)` and fires 1 day 1 hour 30 minutes
+before — correctly — but the confirmation under the two-largest rule read
+"1 day 1 hour before", silently dropping the 30 minutes that were the whole
+reason to add minute granularity. That is the one place in this feature
+where the truncation is user-visible on every use of its sharpest case, not
+just an edge case.
