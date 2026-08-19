@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 
 from app.config import settings
-from app.db.models import ReminderPreset, TagSubscription, User
+from app.db.models import PresetItem, ReminderPreset, TagSubscription, User
 from app.db.session import get_session
 from app.web import auth
 from app.web.app import create_app
@@ -205,16 +205,51 @@ def test_step_1_renders_the_three_preset_cards(client):
     client.post("/welcome/advance")  # step 0 -> 1
     r = client.get("/welcome")
     assert "Relaxed" in r.text and "Standard" in r.text and "Frequent" in r.text
-    # The demo drops "30 minutes" -- PresetItem has no minutes column.
-    assert "30 minutes" not in r.text
 
 
-# The five standard-template rows as parallel form arrays (offset "days:hours",
-# direction, anchor) -- exactly what the fine-tune UI submits on "Create preset".
-# Aligned by index across the three lists, the way the browser's repeated
-# form keys arrive.
+def test_every_preset_template_row_composes_a_real_offset_option():
+    """The offset string means the same thing in three places: OFFSET_OPTIONS,
+    the server macro (days~":"~hours~":"~minutes) and the JS withId(). A row
+    that composes to no option is not an error anywhere -- the <select> just
+    shows "when", and the user's preset is silently wrong."""
+    from app.web.routes.welcome import OFFSET_OPTIONS, PRESET_TEMPLATES
+
+    values = {o["value"] for o in OFFSET_OPTIONS}
+    for name, rules in PRESET_TEMPLATES.items():
+        for rule in rules:
+            assert len(rule) == 5, (name, rule)
+            assert f"{rule[0]}:{rule[1]}:{rule[2]}" in values, (name, rule)
+
+
+def test_step_1_offers_the_sub_hour_options(client):
+    """PresetItem now stores minutes, so the curated list gets the demo's
+    sub-hour answers back."""
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")  # step 0 -> 1
+    r = client.get("/welcome")
+    assert '<option value="0:0:5"' in r.text and "5 minutes" in r.text
+    assert '<option value="0:0:30"' in r.text and "30 minutes" in r.text
+
+
+def test_step_1_server_rendered_rows_preselect_their_own_offset(client):
+    """JS off, the standard rows are emitted server-side. The macro's composed
+    value must match an <option> value exactly, or every row silently falls back
+    to the first option ("when") and a JS-off submit creates the wrong preset."""
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")  # step 0 -> 1
+    r = client.get("/welcome")
+    # standard = opens(when), closes 3d, closes 1d, results(when), payment 1d
+    assert '<option value="3:0:0" selected>' in r.text
+    assert '<option value="1:0:0" selected>' in r.text
+    assert '<option value="0:0:0" selected>' in r.text
+
+
+# The five standard-template rows as parallel form arrays (offset
+# "days:hours:minutes", direction, anchor) -- exactly what the fine-tune UI
+# submits on "Create preset". Aligned by index across the three lists, the way
+# the browser's repeated form keys arrive.
 _STANDARD_FORM = {
-    "offset": ["0:0", "3:0", "1:0", "0:0", "1:0"],
+    "offset": ["0:0:0", "3:0:0", "1:0:0", "0:0:0", "1:0:0"],
     "direction": ["before", "before", "before", "before", "before"],
     "anchor": ["opens", "closes", "closes", "results", "payment"],
 }
@@ -247,7 +282,7 @@ async def test_step_1_fine_tuned_rule_persists_direction_and_hours(client):
     the right PresetItem: after = a positive sign, 3 hours = offset_hours +3."""
     login_as(client, FAN_ID, "fan")
     client.post("/welcome/advance")  # step 0 -> 1
-    data = {"offset": ["0:3"], "direction": ["after"], "anchor": ["results"]}
+    data = {"offset": ["0:3:0"], "direction": ["after"], "anchor": ["results"]}
     r = client.post("/welcome/preset", data=data)
     assert r.headers["location"] == "/welcome"
     async with client.db() as s:
@@ -282,12 +317,51 @@ async def test_step_1_malformed_row_returns_422_not_500(client):
     fail cleanly (422) rather than raising an unhandled ValueError (500)."""
     login_as(client, FAN_ID, "fan")
     client.post("/welcome/advance")  # step 0 -> 1
-    data = {"offset": ["0:0"], "direction": ["before"], "anchor": ["not-a-real-anchor"]}
+    data = {"offset": ["0:0:0"], "direction": ["before"], "anchor": ["not-a-real-anchor"]}
     r = client.post("/welcome/preset", data=data)
     assert r.status_code == 422
     async with client.db() as s:
         presets = (await s.execute(select(ReminderPreset))).scalars().all()
     assert presets == []
+
+
+async def test_the_wizard_can_create_a_thirty_minute_rule(client):
+    """The fine-tune list's sub-hour options reach PresetItem.offset_minutes --
+    the whole point of widening the encoding to "days:hours:minutes"."""
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")  # step 0 -> 1
+
+    r = client.post("/welcome/preset", data={
+        "offset": ["0:0:30"], "direction": ["before"], "anchor": ["opens"],
+    })
+    assert r.status_code == 303
+
+    async with client.db() as s:
+        item = (await s.execute(select(PresetItem))).scalar_one()
+    assert (item.offset_days, item.offset_hours, item.offset_minutes) == (0, 0, -30)
+
+
+def test_a_tampered_offset_string_is_a_422_not_a_500(client):
+    """The closed <select> can never send this; a hand-rolled POST can."""
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")  # step 0 -> 1
+
+    r = client.post("/welcome/preset", data={
+        "offset": ["0:0:banana"], "direction": ["before"], "anchor": ["opens"],
+    })
+    assert r.status_code == 422
+
+
+def test_a_two_part_offset_is_also_refused(client):
+    """The old "days:hours" encoding must not silently parse as something else
+    once the format widened -- it means the page and the route disagree."""
+    login_as(client, FAN_ID, "fan")
+    client.post("/welcome/advance")  # step 0 -> 1
+
+    r = client.post("/welcome/preset", data={
+        "offset": ["0:3"], "direction": ["before"], "anchor": ["opens"],
+    })
+    assert r.status_code == 422
 
 
 def test_step_1_sentence_slot_order_en(client):

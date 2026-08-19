@@ -40,24 +40,27 @@ TOTAL_STEPS = 5
 
 # The reminder-step vocabulary, defined ONCE here and handed to the template
 # (the JS seeds/edits rows from these; invariant 7: passed via `| tojson`, not
-# `| safe`). Offsets are expressible in days+hours only -- PresetItem has no
-# minutes column (minute offsets are a separate wishlist item), so the demo's
-# "30 minutes" option is deliberately dropped. A "0:0" offset is the "when it
-# happens" moment, which carries no before/after.
+# `| safe`). Each value encodes "days:hours:minutes" -- the wizard KEEPS this
+# curated <select> rather than the editor's free HH:MM box: onboarding offers a
+# short list of good answers, the editor is where an exact one is typed. Do not
+# unify them. A "0:0:0" offset is the "when it happens" moment, which carries no
+# before/after.
 OFFSET_OPTIONS = [
     # N_() like the anchors below: the sentence patterns put these labels
     # inside a ja/zh sentence, so an untranslated "1 day" would read as
     # 「締切の1 day前に通知。」. The moment label is deliberately the bare
     # 時/时 in ja/zh — with the direction select hidden it completes the
     # sentence as 「申込受付開始の時に通知。」 / 「申请开始时提醒我。」.
-    {"value": "0:0", "label": N_("when"), "moment": True},
-    {"value": "0:1", "label": N_("1 hour"), "moment": False},
-    {"value": "0:3", "label": N_("3 hours"), "moment": False},
-    {"value": "0:6", "label": N_("6 hours"), "moment": False},
-    {"value": "1:0", "label": N_("1 day"), "moment": False},
-    {"value": "3:0", "label": N_("3 days"), "moment": False},
-    {"value": "5:0", "label": N_("5 days"), "moment": False},
-    {"value": "7:0", "label": N_("1 week"), "moment": False},
+    {"value": "0:0:0", "label": N_("when"), "moment": True},
+    {"value": "0:0:5", "label": N_("5 minutes"), "moment": False},
+    {"value": "0:0:30", "label": N_("30 minutes"), "moment": False},
+    {"value": "0:1:0", "label": N_("1 hour"), "moment": False},
+    {"value": "0:3:0", "label": N_("3 hours"), "moment": False},
+    {"value": "0:6:0", "label": N_("6 hours"), "moment": False},
+    {"value": "1:0:0", "label": N_("1 day"), "moment": False},
+    {"value": "3:0:0", "label": N_("3 days"), "moment": False},
+    {"value": "5:0:0", "label": N_("5 days"), "moment": False},
+    {"value": "7:0:0", "label": N_("1 week"), "moment": False},
 ]
 
 # Two phrasings per anchor keep every rule reading as a grammatical sentence:
@@ -77,33 +80,35 @@ ANCHOR_NOUN = {
 }
 
 # The three starter presets as rule sets, defined once. Each rule is
-# (offset_days, offset_hours, direction, anchor); direction is "before"/"after"
-# and only meaningful for non-moment offsets. The default (standard) reminds
+# [offset_days, offset_hours, offset_minutes, direction, anchor]; direction is
+# "before"/"after" and only meaningful for non-moment offsets. Every row must
+# compose into an OFFSET_OPTIONS value, or the server-rendered <select> selects
+# nothing and silently falls back to "when". The default (standard) reminds
 # once for opens/results/payment and gives closes -- the round with an action
 # to take -- a couple of run-ups; nothing on the show itself.
 PRESET_TEMPLATES = {
     "relaxed": [
-        [0, 0, "before", "opens"],
-        [1, 0, "before", "closes"],
-        [0, 0, "before", "results"],
-        [0, 0, "before", "payment"],
+        [0, 0, 0, "before", "opens"],
+        [1, 0, 0, "before", "closes"],
+        [0, 0, 0, "before", "results"],
+        [0, 0, 0, "before", "payment"],
     ],
     "standard": [
-        [0, 0, "before", "opens"],
-        [3, 0, "before", "closes"],
-        [1, 0, "before", "closes"],
-        [0, 0, "before", "results"],
-        [1, 0, "before", "payment"],
+        [0, 0, 0, "before", "opens"],
+        [3, 0, 0, "before", "closes"],
+        [1, 0, 0, "before", "closes"],
+        [0, 0, 0, "before", "results"],
+        [1, 0, 0, "before", "payment"],
     ],
     "onball": [
-        [1, 0, "before", "opens"],
-        [0, 0, "before", "opens"],
-        [5, 0, "before", "closes"],
-        [3, 0, "before", "closes"],
-        [1, 0, "before", "closes"],
-        [0, 0, "before", "results"],
-        [3, 0, "before", "payment"],
-        [1, 0, "before", "payment"],
+        [1, 0, 0, "before", "opens"],
+        [0, 0, 0, "before", "opens"],
+        [5, 0, 0, "before", "closes"],
+        [3, 0, 0, "before", "closes"],
+        [1, 0, 0, "before", "closes"],
+        [0, 0, 0, "before", "results"],
+        [3, 0, 0, "before", "payment"],
+        [1, 0, 0, "before", "payment"],
     ],
 }
 
@@ -202,10 +207,9 @@ async def create_wizard_preset(
     a real ReminderPreset via the shared service (no second write path), mark it
     the user's default, then advance into the timezone step.
 
-    Each offset arrives as "days:hours" (the fine-tune UI's own encoding);
-    direction and anchor ride alongside as matching arrays. A short/mismatched
-    tail is ignored by zip's own truncation. PresetItem also stores minutes now,
-    but this wizard offers no sub-hour choice yet, so every rule sends 0.
+    Each offset arrives as "days:hours:minutes" (the fine-tune UI's own
+    encoding, OFFSET_OPTIONS above); direction and anchor ride alongside as
+    matching arrays. A short/mismatched tail is ignored by zip's own truncation.
 
     Two defensive checks, both against a tampered POST the closed <select>s
     would never send themselves: an empty `rules` list would otherwise create
@@ -213,16 +217,21 @@ async def create_wizard_preset(
     never reminds, contradicting preferences.py's "no empty-preset limbo"
     invariant -- and a bad offset/anchor value would otherwise raise an
     unhandled ValueError (500) instead of a clean 422.
+
+    The part count is checked EXACTLY, not leniently: a two-part "days:hours"
+    row means the page and this route disagree about the encoding, and quietly
+    reading it as days+hours would hide that while dropping every minute the
+    user picked. Better a 422 nobody can reach by clicking than a preset that
+    silently reminds at the wrong time.
     """
     db_user = await ensure_user(session, user.id, user.username)
     rules: list[tuple[int, int, int, str, Anchor]] = []
     for off, dir_, anc in zip(offset, direction, anchor, strict=False):
-        days_str, _sep, hours_str = off.partition(":")
+        parts = off.split(":")
+        if len(parts) != 3:
+            raise HTTPException(status_code=422, detail=f"bad reminder row: {off!r}")
         try:
-            # Minutes is 0 here on purpose: this wizard's offset encoding is
-            # still "days:hours", so the sub-hour half of a preset item has no
-            # way to arrive yet. It is the wizard UI's turn to grow one.
-            rules.append((int(days_str or 0), int(hours_str or 0), 0, dir_, Anchor(anc)))
+            rules.append((int(parts[0]), int(parts[1]), int(parts[2]), dir_, Anchor(anc)))
         except ValueError as e:
             raise HTTPException(status_code=422, detail=f"bad reminder row: {e}") from e
     if not rules:
