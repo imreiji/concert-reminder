@@ -31,7 +31,7 @@ from app.db.models import (
     User,
 )
 from app.db.session import get_session
-from app.domain.types import RoundKind, TagKind
+from app.domain.types import Anchor, RoundKind, TagKind
 from app.web import auth
 from app.web.app import create_app
 
@@ -440,3 +440,113 @@ async def test_editing_an_item_puts_the_same_sign_on_all_three_columns(client):
     async with client.db() as s:
         item = (await s.execute(select(PresetItem))).scalar_one()
     assert (item.offset_days, item.offset_hours, item.offset_minutes) == (1, 1, 15)
+
+
+async def test_add_item_stores_a_non_zero_minutes_offset(client):
+    """POST /presets/{id}/items -- the ADD path, not create-preset or edit.
+
+    Fix round 1, Important 1: nothing previously posted a non-zero `time` to
+    this specific route, so `offset_minutes=sign * minutes` could be deleted
+    from `add_item` and the suite stayed green. Real cost: "Add a rule",
+    type 0:30 before closes, save -- and the reminder fires AT the deadline
+    instead of 30 minutes before, while the box re-renders 0:00 so it looks
+    like the user's own typo.
+
+    Mutation: drop `offset_minutes=sign * minutes` from `add_item`'s
+    PresetItem(...) call -- this fails because the stored triple would be
+    (0, 0, 0) instead of (0, 0, -30).
+    """
+    login_as(client, USER_A, "reiji")
+    client.post("/presets", data={"name": "p", "anchor": "closes", "days": "3"})
+    r = client.post("/presets/1/items", data={
+        "anchor": "opens", "days": "0", "time": "0:30", "direction": "before",
+    })
+    assert r.status_code == 303
+
+    async with client.db() as s:
+        items = (await s.execute(select(PresetItem))).scalars().all()
+    added = next(i for i in items if i.anchor is Anchor.OPENS)
+    assert (added.offset_days, added.offset_hours, added.offset_minutes) == (0, 0, -30)
+
+
+async def test_editing_an_item_to_before_negates_minutes_too(client):
+    """Fix round 1, Important 2: the existing edit-sign test only ever edits
+    to `direction=after`, so `sign == +1` there and `item.offset_minutes =
+    minutes` (dropping `sign *`) would survive it undetected. This one edits
+    to `before` with a non-zero time, so a dropped `sign *` on minutes would
+    leave it positive while days/hours went negative -- a mixed-sign row,
+    exactly the class invariant 1's sign convention exists to rule out.
+
+    Mutation: change `item.offset_minutes = sign * minutes` to
+    `item.offset_minutes = minutes` -- this fails because minutes would come
+    back +15 instead of -15 alongside days=-1, hours=-1.
+    """
+    login_as(client, USER_A, "reiji")
+    client.post("/presets", data={
+        "name": "p", "anchor": "closes", "days": "3", "time": "0:00",
+        "direction": "before",
+    })
+    r = client.post("/presets/1/items/1/edit", data={
+        "anchor": "closes", "days": "1", "time": "1:15", "direction": "before",
+    })
+    assert r.status_code == 303
+
+    async with client.db() as s:
+        item = (await s.execute(select(PresetItem))).scalar_one()
+    assert (item.offset_days, item.offset_hours, item.offset_minutes) == (-1, -1, -15)
+
+
+async def test_minutes_only_after_rule_renders_direction_as_after(client):
+    """(0, 0, +15) means "15 minutes after", with days and hours both zero --
+    the direction select must read "after" from the minutes sign alone.
+
+    Fix round 1, Minor 3: dropping `or i.offset_minutes > 0` from the
+    macro's direction expression survives the suite with no coverage of a
+    minutes-only positive item. Real cost: the row re-renders "before"
+    selected, and saving any OTHER field on it (say, the anchor) silently
+    flips the stored offset from +15 to -15.
+
+    Mutation: remove `or i.offset_minutes > 0` from the call site's
+    direction ternary -- this fails because the "after" option would no
+    longer carry `selected`.
+    """
+    login_as(client, USER_A, "reiji")
+    async with client.db() as s:
+        preset = ReminderPreset(user_id=USER_A, name="p")
+        s.add(preset)
+        await s.flush()
+        s.add(PresetItem(
+            preset_id=preset.id, anchor=Anchor.CLOSES,
+            offset_days=0, offset_hours=0, offset_minutes=15,
+        ))
+        await s.commit()
+
+    r = client.get("/preferences")
+    ruleline = r.text[r.text.index('class="ruleline"'):]
+    ruleline = ruleline[:ruleline.index("</form>")]
+    assert 'value="after" selected>' in ruleline
+    assert 'value="before" selected>' not in ruleline
+
+
+def test_add_item_rejects_a_bad_time_value(client):
+    """Fix round 1, Minor 4: only POST /presets had its 422 pinned. Without
+    the try/except in `add_item`, a typo'd time raises an uncaught
+    ValueError instead of answering 422."""
+    login_as(client, USER_A, "reiji")
+    client.post("/presets", data={"name": "p", "anchor": "closes", "days": "3"})
+    r = client.post("/presets/1/items", data={
+        "anchor": "opens", "days": "0", "time": "0:75", "direction": "before",
+    })
+    assert r.status_code == 422
+
+
+def test_edit_item_rejects_a_bad_time_value(client):
+    """Fix round 1, Minor 4: only POST /presets had its 422 pinned. Without
+    the try/except in `edit_item`, a typo'd time raises an uncaught
+    ValueError instead of answering 422."""
+    login_as(client, USER_A, "reiji")
+    client.post("/presets", data={"name": "p", "anchor": "closes", "days": "3"})
+    r = client.post("/presets/1/items/1/edit", data={
+        "anchor": "closes", "days": "1", "time": "0:75", "direction": "before",
+    })
+    assert r.status_code == 422
