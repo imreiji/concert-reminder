@@ -2748,6 +2748,23 @@ async def test_adding_a_five_minute_rule_from_the_concert_page(client):
     assert (rule.offset_days, rule.offset_hours, rule.offset_minutes) == (0, 0, -5)
 
 
+async def test_adding_a_rule_with_a_bad_time_is_422_not_500(client):
+    """The mutation this kills: dropping the route's try/except around
+    parse_hhmm turns a user's typo into an uncaught ValueError -> 500
+    instead of a 422. Also pins that a rejected post creates no row -- a
+    422 that still writes a rule would be worse than the 500."""
+    login(client)
+    await seed_concert(client.db)
+
+    r = client.post("/concerts/np/rules", data={
+        "anchor": "opens", "days": "0", "time": "0:75",
+    })
+    assert r.status_code == 422
+
+    async with client.db() as s:
+        assert (await s.execute(select(ReminderRule))).first() is None
+
+
 async def test_reminders_note_names_the_default_preset(client):
     """Demo: "From your default preset — <name>"."""
     await seed_concert(client.db)
