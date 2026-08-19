@@ -74,7 +74,18 @@ def describe_offset(days: int, hours: int, minutes: int) -> str:
     if m:
         parts.append(ngettext("{n} minute", "{n} minutes", m).format(n=m))
 
-    quantity = " ".join(parts[:2])
+    # The JOINER is translatable for the same reason the sentence patterns in
+    # preferences.html are: a hardcoded " " is an English typesetting rule, not
+    # a universal one. English needs the space ("1 hour 30 minutes"); ja and zh
+    # must NOT have it -- 「1時間 30分」/「1小时 30分钟」 reads as two fragments
+    # rather than one duration. Their msgstrs are the same two slots with
+    # nothing between them.
+    pair = parts[:2]
+    quantity = (
+        _("{first} {second}").format(first=pair[0], second=pair[1])
+        if len(pair) == 2
+        else pair[0]
+    )
     after = days > 0 or hours > 0 or minutes > 0
     pattern = _("{quantity} after") if after else _("{quantity} before")
     return pattern.format(quantity=quantity)
