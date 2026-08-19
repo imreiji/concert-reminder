@@ -44,7 +44,14 @@ def parse_hhmm(text: str) -> tuple[int, int]:
 
 
 def format_hhmm(hours: int, minutes: int) -> str:
-    """The value the box re-renders with, so a saved rule reads back as typed."""
+    """The value the box re-renders with, so a saved rule reads back as typed.
+
+    MAGNITUDE ONLY -- it takes `abs()` of both arguments and drops the sign,
+    which is correct for its one caller (the editor box, which shows a
+    duration with direction picked separately) but means a signed pair like
+    `describe_offset` takes would silently lose its sign here. Don't feed it
+    a signed offset expecting the sign back.
+    """
     return f"{abs(hours)}:{abs(minutes):02d}"
 
 

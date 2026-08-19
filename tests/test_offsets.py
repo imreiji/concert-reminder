@@ -51,8 +51,15 @@ def test_format_hhmm_round_trips_what_the_box_shows():
         (-3, -6, 0, "3 days 6 hours before"),
         (0, 0, 15, "15 minutes after"),
         (1, 0, 0, "1 day after"),
+        (-3, -6, -45, "3 days 6 hours before"),
+        (2, 1, 30, "2 days 1 hour after"),
     ],
 )
 def test_describe_offset(days, hours, minutes, expected):
+    """The last two cases have three non-zero units, so they pin "the two
+    LARGEST units" as an actual behaviour: they kill the mutant that swaps
+    `parts[:2]` for `parts[-2:]`, which every earlier (<=2-unit) case cannot
+    tell apart from correct code -- that mutant would render (-3, -6, -45) as
+    "6 hours 45 minutes before" instead of "3 days 6 hours before"."""
     set_locale("en")
     assert describe_offset(days, hours, minutes) == expected
