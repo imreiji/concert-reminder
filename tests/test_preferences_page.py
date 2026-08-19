@@ -332,17 +332,23 @@ async def test_reminder_sentence_slot_order_en(client):
 
 
 async def test_reminder_sentence_slot_order_ja(client):
-    """Under ja the pattern reorders the slots -- the anchor select leads and
-    the day/hour selects follow -- once the ja msgstr exists.
+    """Under ja the pattern REORDERS the slots, which is the entire reason the
+    sentence is one translatable pattern instead of four labels in a row.
 
-    This task (minute-offsets Task 4) changed the pattern's msgid to
-    "Remind me {days} day(s) {time} {direction} each {anchor}." (days/hours
-    collapsed into one h:mm box), which by construction has no ja translation
-    yet -- Task 8 re-translates it. Until then gettext falls back to the
-    (untranslated) English msgid, so the slots render in SOURCE order rather
-    than reordered, and this test only pins that the page still renders and
-    the slots still resolve -- not the ja word order, which
-    test_i18n_catalogues.py will re-guard once Task 8 lands the msgstr.
+    The ja msgstr is 「各{anchor}の{days}日{time}{direction}に通知。」 -- the
+    anchor select LEADS, then days, then the h:mm box, then before/after, and
+    the verb closes the sentence. English is the opposite order
+    ("Remind me {days} day(s) {time} {direction} each {anchor}."), so the one
+    assertion that cannot be satisfied by accident is anchor-before-days: it is
+    false in the source string and false under any English fallback.
+
+    Mutations this survives: none of them quietly. Reverting the ja msgstr to
+    English order, dropping it (gettext falls back to the English msgid),
+    marking it fuzzy (dropped at compile, same fallback), or having
+    sentence_slots emit the slots in dict order rather than pattern order all
+    put days ahead of anchor and fail the first assertion. Emitting the ja
+    literal runs without the slots, or the slots without the literals, fails
+    the others.
     """
     from app import i18n
 
@@ -353,9 +359,24 @@ async def test_reminder_sentence_slot_order_ja(client):
         client.cookies.set("lang", "ja")
         r = client.get("/preferences")
         assert r.status_code == 200
-        assert 'name="days"' in r.text and 'name="anchor"' in r.text and 'name="time"' in r.text
-        # No ja msgstr yet for the new pattern -- falls back to source order.
-        assert r.text.index('name="days"') < r.text.index('name="anchor"')
+        # Scope to ONE rendered sentence: 「の」/「各」 are ordinary Japanese and
+        # occur all over the page, so a whole-page .index() would find prose
+        # rather than the pattern's own literal runs.
+        start = r.text.index('class="sentence')
+        sentence = r.text[start:r.text.index("</form>", start)]
+        anchor = sentence.index('name="anchor"')
+        days = sentence.index('name="days"')
+        time_box = sentence.index('name="time"')
+        direction = sentence.index('name="direction"')
+        # The ja order, slot by slot: anchor, days, time, direction. The first
+        # comparison is the reversal of the English order.
+        assert anchor < days < time_box < direction
+        # ...and the pattern's literal runs land between the right slots, so
+        # this is the ja sentence and not four controls with English glue.
+        assert sentence.index("各") < anchor
+        assert anchor < sentence.index("の") < days
+        assert direction < sentence.index("に通知。")
+        assert "each" not in sentence  # the EN pattern's between-slots text
     finally:
         i18n.reset_catalog_cache()
 
