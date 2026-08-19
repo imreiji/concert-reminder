@@ -242,10 +242,16 @@ async def test_a_sub_hour_item_is_not_swallowed_by_the_whole_hour_one(client):
     login_as(client, EDITOR_ID, "reiji")
     build_concert_with_deadlines(client)
     client.post("/presets", data={"name": "fcfs"})
-    client.post("/presets/1/items", data={
-        "anchor": "closes", "days": 0, "time": "0:00", "direction": "before"})
-    client.post("/presets/1/items", data={
-        "anchor": "closes", "days": 0, "time": "0:30", "direction": "before"})
+    # Seeded directly, NOT through the form: the `time` field does not exist
+    # until Task 4, and the dedupe is a service-layer property anyway.
+    async with client.db() as s:
+        s.add_all([
+            PresetItem(preset_id=1, anchor=Anchor.CLOSES,
+                       offset_days=0, offset_hours=0, offset_minutes=0),
+            PresetItem(preset_id=1, anchor=Anchor.CLOSES,
+                       offset_days=0, offset_hours=0, offset_minutes=-30),
+        ])
+        await s.commit()
 
     assert client.post("/concerts/hasunosora-6th/presets/1/apply").status_code == 200
 
@@ -262,8 +268,10 @@ async def test_applying_a_preset_with_minutes_twice_creates_nothing_new(client):
     login_as(client, EDITOR_ID, "reiji")
     build_concert_with_deadlines(client)
     client.post("/presets", data={"name": "fcfs"})
-    client.post("/presets/1/items", data={
-        "anchor": "closes", "days": 0, "time": "0:30", "direction": "before"})
+    async with client.db() as s:
+        s.add(PresetItem(preset_id=1, anchor=Anchor.CLOSES,
+                         offset_days=0, offset_hours=0, offset_minutes=-30))
+        await s.commit()
 
     client.post("/concerts/hasunosora-6th/presets/1/apply")
     before = len(await _all(client.db, ReminderRule))
