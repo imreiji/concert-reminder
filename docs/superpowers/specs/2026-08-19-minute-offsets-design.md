@@ -20,7 +20,7 @@ Two things found while exploring, both folded into this build:
   (`_rules.html`) and as `same-day` in `/myreminders`. That is a live defect
   today, not something minutes introduce — minutes only make it reachable
   from more places.
-* **`apply_preset_to_concert` dedupes on `(anchor, offset_days,
+* **`apply_preset` dedupes on `(anchor, offset_days,
   offset_hours)`** (`db/core.py`). Add a column and forget this tuple and
   "30 minutes before closes" collides with "at closes": the second rule is
   silently not created, and nothing anywhere reports it.
@@ -113,7 +113,7 @@ no preset-editor frame at all.
 
 * Planner: a minute offset moves `fire_at_utc` by exactly that much, in both
   directions, and a mixed `1d 2h 30m` rule fires where arithmetic says.
-* `apply_preset_to_concert`: a preset holding both "at closes" and
+* `apply_preset`: a preset holding both "at closes" and
   "30 minutes before closes" creates TWO rules. The mutation this must not
   survive is dropping `offset_minutes` from the dedupe tuple.
 * `parse_hhmm`: the accepted forms, and that `"0:75"`, `"24:00"` and
