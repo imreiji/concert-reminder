@@ -139,15 +139,15 @@
        {days}/{hours}/{direction}/{anchor} slots in the viewer-locale word order
        (sentence_slots, web/app.py) -- ja/zh reorder freely, EN reads as before.
        The select names/values are unchanged, so the POST body is identical. #}
-    {% macro sentence_fields(days_val, hours_val, dir_val, anchor_val) -%}
+    {% macro sentence_fields(days_val, hours_val, minutes_val, dir_val, anchor_val) -%}
       {%- set days_html %}<select name="days">{% for n in range(0, 61) %}<option value="{{ n }}" {% if n == days_val %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>{% endset -%}
-      {%- set hours_html %}<select name="hours">{% for n in range(0, 24) %}<option value="{{ n }}" {% if n == hours_val %}selected{% endif %}>{{ n }}</option>{% endfor %}</select>{% endset -%}
+      {%- set time_html %}<input type="text" name="time" value="{{ hhmm(hours_val, minutes_val) }}" inputmode="numeric" pattern="([01]?[0-9]|2[0-3])(:[0-5][0-9])?" placeholder="0:30" title="{{ _('Hours and minutes, like 0:30 or 3:00') }}" size="5">{% endset -%}
       {%- set direction_html %}<select name="direction"><option value="before" {% if dir_val == "before" %}selected{% endif %}>{{ _("before") }}</option><option value="after" {% if dir_val == "after" %}selected{% endif %}>{{ _("after") }}</option></select>{% endset -%}
       {# Literal label map: computed .value.replace().capitalize() can't be
          extracted for translation. msgids reproduce today's rendered strings. #}
       {%- set anchor_labels = {"opens": _("Opens"), "closes": _("Closes"), "results": _("Results"), "payment": _("Payment"), "event_start": _("Event start")} -%}
       {%- set anchor_html %}<select name="anchor">{% for a in anchors %}<option value="{{ a.value }}" {% if a.value == anchor_val %}selected{% endif %}>{{ anchor_labels.get(a.value, a.value) }}</option>{% endfor %}</select>{% endset -%}
-      {{ sentence_slots(_("Remind me {days} day(s) {hours} hour(s) {direction} each {anchor}."), {"days": days_html, "hours": hours_html, "direction": direction_html, "anchor": anchor_html}) }}
+      {{ sentence_slots(_("Remind me {days} day(s) {time} {direction} each {anchor}."), {"days": days_html, "time": time_html, "direction": direction_html, "anchor": anchor_html}) }}
     {%- endmacro %}
 
     {% for p in presets %}
@@ -168,8 +168,8 @@
       {% for i in p.items %}
       <div class="ruleline">
         <form class="sentence inline" method="post" action="/presets/{{ p.id }}/items/{{ i.id }}/edit" style="display:contents">
-          {{ sentence_fields(i.offset_days | abs, i.offset_hours | abs,
-                             "after" if (i.offset_days > 0 or i.offset_hours > 0) else "before",
+          {{ sentence_fields(i.offset_days | abs, i.offset_hours | abs, i.offset_minutes | abs,
+                             "after" if (i.offset_days > 0 or i.offset_hours > 0 or i.offset_minutes > 0) else "before",
                              i.anchor.value) }}
           <button class="act" type="submit">{{ _("Save") }}</button>
         </form>
@@ -180,7 +180,7 @@
         <summary>{{ _("Add a rule") }}</summary>
         <div class="fold-body">
           <form class="sentence inline" method="post" action="/presets/{{ p.id }}/items">
-            {{ sentence_fields(3, 0, "before", "closes") }}
+            {{ sentence_fields(3, 0, 0, "before", "closes") }}
             <button class="act" type="submit">{{ _("Add rule") }}</button>
           </form>
         </div>
@@ -198,7 +198,7 @@
         <div class="fold-body">
           <form class="stack" method="post" action="/presets">
             <label>{{ _("Name") }} <input name="name" required maxlength="100" placeholder="{{ _('standard lottery coverage') }}"></label>
-            <div class="sentence inline">{{ sentence_fields(3, 0, "before", "closes") }}</div>
+            <div class="sentence inline">{{ sentence_fields(3, 0, 0, "before", "closes") }}</div>
             <button class="act" type="submit">{{ _("Create preset") }}</button>
             <span class="clock" style="display:block">{{ _("Created with this first rule — add more after.") }}</span>
           </form>

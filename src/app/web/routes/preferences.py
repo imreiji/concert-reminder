@@ -72,6 +72,7 @@ from app.db.service import (
 from app.db.session import get_session
 from app.domain.timezones import fmt_dual_lines
 from app.domain.types import Anchor
+from app.offsets import parse_hhmm
 from app.web.auth import SessionUser, require_admin, require_user, revoke_session
 
 router = APIRouter()
@@ -215,11 +216,15 @@ async def create_preset(
     name: str = Form(..., min_length=1, max_length=100),
     anchor: Anchor = Form(Anchor.CLOSES),
     days: int = Form(3, ge=0, le=60),
-    hours: int = Form(0, ge=0, le=23),
+    time: str = Form("0:00"),
     direction: str = Form("before"),
     next_url: str = Form("/preferences", alias="next"),
 ):
     """Create a preset WITH its first item — no empty-preset limbo."""
+    try:
+        hours, minutes = parse_hhmm(time)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"bad time: {e}") from e
     await ensure_user(session, user.id, user.username)
     preset = ReminderPreset(user_id=user.id, name=name.strip())
     session.add(preset)
@@ -227,7 +232,7 @@ async def create_preset(
     sign = 1 if direction == "after" else -1
     session.add(PresetItem(
         preset_id=preset.id, anchor=anchor,
-        offset_days=sign * days, offset_hours=sign * hours,
+        offset_days=sign * days, offset_hours=sign * hours, offset_minutes=sign * minutes,
     ))
     await session.commit()
     return RedirectResponse(_safe_next(next_url), status_code=303)
@@ -378,14 +383,18 @@ async def add_item(
     session: AsyncSession = Depends(get_session),
     anchor: Anchor = Form(...),
     days: int = Form(..., ge=0, le=60),
-    hours: int = Form(0, ge=0, le=23),
+    time: str = Form("0:00"),
     direction: str = Form("before"),
 ):
+    try:
+        hours, minutes = parse_hhmm(time)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"bad time: {e}") from e
     await owned_preset(session, user.id, preset_id)
     sign = 1 if direction == "after" else -1
     session.add(PresetItem(
         preset_id=preset_id, anchor=anchor,
-        offset_days=sign * days, offset_hours=sign * hours,
+        offset_days=sign * days, offset_hours=sign * hours, offset_minutes=sign * minutes,
     ))
     await session.commit()
     return RedirectResponse("/preferences", status_code=303)
@@ -399,10 +408,14 @@ async def edit_item(
     session: AsyncSession = Depends(get_session),
     anchor: Anchor = Form(...),
     days: int = Form(..., ge=0, le=60),
-    hours: int = Form(0, ge=0, le=23),
+    time: str = Form("0:00"),
     direction: str = Form("before"),
 ):
     """Adjust an existing item in place — every field, no delete-and-rebuild."""
+    try:
+        hours, minutes = parse_hhmm(time)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=f"bad time: {e}") from e
     await owned_preset(session, user.id, preset_id)
     item = await session.get(PresetItem, item_id)
     if item is None or item.preset_id != preset_id:
@@ -411,6 +424,7 @@ async def edit_item(
     item.anchor = anchor
     item.offset_days = sign * days
     item.offset_hours = sign * hours
+    item.offset_minutes = sign * minutes
     await session.commit()
     return RedirectResponse("/preferences", status_code=303)
 

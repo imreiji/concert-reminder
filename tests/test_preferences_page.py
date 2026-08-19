@@ -16,12 +16,14 @@ from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 
 from app.config import settings
 from app.db.models import (
     Concert,
     ConcertDay,
     ConcertTag,
+    PresetItem,
     ReminderPreset,
     Round,
     Tag,
@@ -324,14 +326,24 @@ async def test_reminder_sentence_slot_order_en(client):
     r = client.get("/preferences")
     # A preset must exist for a rule row to render; the "New preset" fold
     # always carries a blank sentence_fields even with no presets.
-    assert 'name="days"' in r.text and 'name="anchor"' in r.text
+    assert 'name="days"' in r.text and 'name="time"' in r.text and 'name="anchor"' in r.text
     assert r.text.index('name="days"') < r.text.index('name="anchor"')
     assert "each" in r.text  # the EN pattern's between-slots text
 
 
 async def test_reminder_sentence_slot_order_ja(client):
     """Under ja the pattern reorders the slots -- the anchor select leads and
-    the day/hour selects follow -- and the translated pattern text renders."""
+    the day/hour selects follow -- once the ja msgstr exists.
+
+    This task (minute-offsets Task 4) changed the pattern's msgid to
+    "Remind me {days} day(s) {time} {direction} each {anchor}." (days/hours
+    collapsed into one h:mm box), which by construction has no ja translation
+    yet -- Task 8 re-translates it. Until then gettext falls back to the
+    (untranslated) English msgid, so the slots render in SOURCE order rather
+    than reordered, and this test only pins that the page still renders and
+    the slots still resolve -- not the ja word order, which
+    test_i18n_catalogues.py will re-guard once Task 8 lands the msgstr.
+    """
     from app import i18n
 
     i18n.reset_catalog_cache()
@@ -340,11 +352,10 @@ async def test_reminder_sentence_slot_order_ja(client):
         login_as(client, USER_A, "reiji")
         client.cookies.set("lang", "ja")
         r = client.get("/preferences")
-        # ja: 各{anchor}の{days}日{hours}時間{direction}に通知。 -> anchor before days.
-        assert r.text.index('name="anchor"') < r.text.index('name="days"')
-        # Translated pattern fragments appear (proves it went through slots).
-        assert "に通知" in r.text
-        assert "日" in r.text
+        assert r.status_code == 200
+        assert 'name="days"' in r.text and 'name="anchor"' in r.text and 'name="time"' in r.text
+        # No ja msgstr yet for the new pattern -- falls back to source order.
+        assert r.text.index('name="days"') < r.text.index('name="anchor"')
     finally:
         i18n.reset_catalog_cache()
 
@@ -383,3 +394,49 @@ async def test_editors_shown_for_admin(client, monkeypatch):
     r = client.get("/preferences")
     assert r.status_code == 200
     assert "Editors" in r.text
+
+
+# ── The h:mm box (minute-offsets, Task 4) ────────────────────────────────
+
+
+async def test_a_preset_item_round_trips_a_sub_hour_offset(client):
+    """Type 0:30, store (0, 0, -30), and read it back out of the box as 0:30."""
+    login_as(client, USER_A, "reiji")
+    assert client.post("/presets", data={
+        "name": "fcfs", "anchor": "opens", "days": "0", "time": "0:30",
+        "direction": "before",
+    }).status_code == 303
+
+    async with client.db() as s:
+        item = (await s.execute(select(PresetItem))).scalar_one()
+    assert (item.offset_days, item.offset_hours, item.offset_minutes) == (0, 0, -30)
+
+    page = client.get("/preferences")
+    assert 'value="0:30"' in page.text
+
+
+def test_a_bad_time_value_is_refused_not_rounded(client):
+    """0:75 is a typo, and a reminder that silently moved to 1:15 is worse
+    than an error page."""
+    login_as(client, USER_A, "reiji")
+    r = client.post("/presets", data={
+        "name": "typo", "anchor": "opens", "days": "0", "time": "0:75",
+        "direction": "before",
+    })
+    assert r.status_code == 422
+
+
+async def test_editing_an_item_puts_the_same_sign_on_all_three_columns(client):
+    login_as(client, USER_A, "reiji")
+    client.post("/presets", data={
+        "name": "p", "anchor": "closes", "days": "3", "time": "0:00",
+        "direction": "before",
+    })
+    r = client.post("/presets/1/items/1/edit", data={
+        "anchor": "closes", "days": "1", "time": "1:15", "direction": "after",
+    })
+    assert r.status_code == 303
+
+    async with client.db() as s:
+        item = (await s.execute(select(PresetItem))).scalar_one()
+    assert (item.offset_days, item.offset_hours, item.offset_minutes) == (1, 1, 15)

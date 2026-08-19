@@ -809,7 +809,7 @@ async def test_tick_transient_failure_leaves_dm_blocked_unchanged(client):
 async def test_new_preset_is_born_with_its_first_item(client):
     login_as(client, FAN_ID, "fan")
     r = client.post("/presets", data={
-        "name": "standard", "anchor": "closes", "days": 5, "hours": 2, "direction": "before",
+        "name": "standard", "anchor": "closes", "days": 5, "time": "2:00", "direction": "before",
     })
     assert r.status_code == 303
     from app.db.models import PresetItem
@@ -832,7 +832,7 @@ async def test_edit_item_in_place_every_field(client):
     login_as(client, FAN_ID, "fan")
     client.post("/presets", data={"name": "s", "anchor": "closes", "days": 3})
     client.post("/presets/1/items/1/edit", data={
-        "anchor": "event_start", "days": 7, "hours": 12, "direction": "after",
+        "anchor": "event_start", "days": 7, "time": "12:00", "direction": "after",
     })
     from app.db.models import PresetItem
     from app.domain.types import Anchor
