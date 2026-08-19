@@ -26,6 +26,7 @@ dependencies = [
 dev = [
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
+    "pytest-xdist>=3.6",  # the suite outgrew a serial run; see addopts below
     "ruff>=0.8",
 ]
 
@@ -46,6 +47,32 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Form", "fastapi.Query"]  #
 asyncio_mode = "auto"
 pythonpath = ["src"]
 testpaths = ["tests"]
+# Run the suite in parallel BY DEFAULT, rather than documenting a flag.
+#
+# Measured back-to-back on one 16-core machine at 3,023 tests (this box's
+# absolute timings drift >50% across a session, so numbers from separate
+# sessions are not comparable):
+#
+#     serial   591s        -n 4   170s        -n 8   114s        -n auto  100s
+#
+# All 3,023 pass at every worker count: the suite was already parallel-safe
+# (one in-memory database per test, every scratch file on tmp_path, no chdir
+# and no os.environ writes anywhere in tests/).
+#
+# The default is here, not in a doc, because a serial run at 591s exceeds the
+# 600s ceiling of the agent harness that runs it -- so it gets backgrounded,
+# and the run silently stops being something anyone waits for. Documenting the
+# flag was tried and failed three times: prose does not survive habit. With
+# the default parallel, the remaining mistake is a targeted run paying ~5s of
+# worker startup, which is a nuisance rather than a lost verification.
+#
+# Pass -n0 to opt out: iterating on one file (3.3s vs 10.3s there), or -s,
+# whose output xdist interleaves. --collect-only and --pdb already opt
+# themselves out inside xdist.
+#
+# What this asks of new tests: no dependence on execution ORDER or on another
+# test's leftovers, and scratch files under tmp_path rather than a fixed path.
+addopts = "-n auto"
 
 [build-system]
 requires = ["hatchling"]

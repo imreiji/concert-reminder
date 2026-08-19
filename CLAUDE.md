@@ -31,8 +31,15 @@ works is the one thing a reader can always recover from the code itself.
 - Bot dev: set `DEV_GUILD_ID` to your test server's ID — slash commands
   sync to that guild in seconds instead of the up-to-an-hour global sync
   (unset, the production default, keeps the global sync)
-- Tests: `uv run pytest -q` — MUST pass before any commit
-- Single test: `uv run pytest tests/test_service.py::test_name -q`
+- Tests: `uv run pytest -q` — MUST pass before any commit. Runs across all
+  cores by default (`addopts = "-n auto"`, pytest-xdist): ~100s on a 16-core
+  box, where a serial run is 591s. That default exists so a full run FITS in
+  one foreground call instead of being backgrounded and forgotten — do not
+  remove it; `tests/test_suite_runs_parallel.py` fails if you do.
+- Single test: `uv run pytest tests/test_service.py::test_name -q -n0` — `-n0`
+  turns the workers off, worth ~5s on a targeted run and needed for `-s`
+  (xdist interleaves worker output). `--collect-only` and `--pdb` opt
+  themselves out already.
 - Lint: `uv run ruff check .` — MUST be clean before any commit
 - New migration: `uv run alembic revision --autogenerate -m "msg"`, then
   review it (see Migrations below), then `uv run alembic upgrade head`
@@ -609,6 +616,12 @@ rather than assuming a later pass will.
 
 ## Testing conventions
 
+- **The suite runs in PARALLEL by default**, so a new test may not depend on
+  execution order, on another test's leftovers, or on a fixed path any other
+  test could touch — scratch files go under `tmp_path`. Nothing enforces this;
+  a test that breaks it fails intermittently on whichever worker gets it,
+  which is the worst failure to read. The shared `db`/`session` fixtures are
+  already safe (one in-memory database per test).
 - Async tests via pytest-asyncio auto mode — `await` directly, never
   `run_until_complete` inside a test.
 - **Use `tests/conftest.py`'s shared `db` / `session` fixtures; do not write
